@@ -1,0 +1,5 @@
+# env files
+.vscode
+
+# build artifacts
+build/
