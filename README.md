@@ -1,4 +1,4 @@
-# CS262 Design Project 1: Wire Protocols
+# CS 262: Wire Protocols
 
 ## Build Information
 
