@@ -1,8 +1,7 @@
 /**
- * The `Network` class is the network layer abstraction for both the server and
- * client. The class also serves as the data link layer and defines the common
- * wire protocol the server and client use to communicate. The following breaks
- * down how a user interacts with this class:
+ * The `Network` class is the data link layer abstraction for both the server and
+ * client and defines the common wire protocol the server and client use to
+ * communicate. The following breaks down how a user interacts with this class:
  *
  * 1. Register callbacks with `Network` for each operation (`OpCode`) the user
  *    wants to handle.
@@ -13,11 +12,21 @@
  *    `sendMessage()`.
  *
  * Communication over the network and the parsing of operations, metadata, and 
- * data are handled by this class as well. Every packet sent between `Network`
- * instances must follow the following wire protocol:
+ * data are handled by this class as well. Notably, this class does not initate
+ * connections or handle the closing (unexepected or intentional) of connections.
+ * The user of this class must handle possible `SIGPIPE`s and manage the socket
+ * file descriptor.
  * 
- * > Operation (VERSION, OpCode)
- * > Metadata  (dataLength, senderLength, receiverLength)
+ * Every packet sent between `Network` instances must follow the following wire
+ * protocol:
+ * 
+ * //////// Header ////////
+ * > Protocol version number (4 bytes)
+ * > Operation (4 bytes)
+ * > Sender information data length (8 bytes)
+ * > Receiver information data length (8 bytes)
+ * > Data length (8 bytes)
+ * ///////// Data /////////
  * > Sender information of length `senderLength` (Could be 0)
  * > Reciever information of length `recieverLength` (Could be 0)
  * > Operation data of length `dataLength`
@@ -25,11 +34,13 @@
  * Any data received by this class that does not follow the above protocol will
  * be ignored.
  * 
+ * ///////////////////////////// Usage Information /////////////////////////////
+ * 
  * Function information and return values:
  * All functions in `Network` return an int which is the return value of network
- * operation used in the function. The semantic return value of the function
- * is returned in an output parameter at the end of the argument list, marked by
- * <argumentName>Out.
+ * operation used in the function. If a function has an additional return value,
+ * it is returned in an output parameter at the end of the argument list, marked
+ * by <argumentName>Out.
  * 
  * Network return values and error codes:
  * Errors from the server to the client are returned using the `ERROR` op code.
@@ -39,8 +50,18 @@
  * the client will receive a `LIST`. For any other void function such as sending
  * a message to another user, the client will receive `OK` on success, or `ERROR`
  * with a message on failure.
+ * 
+ * Callbacks and Receiving Data from the Client/Server:
+ * When the `receiveOperation()` function is called by either the client or
+ * server, the function will block until an `OpCode` is received on the
+ * designated socket. Any subsequent data received will be parsed by this class
+ * and passed to the registered callback for that operation in a `Message`
+ * object. The fields of the `Message` object are only defined for some
+ * oeprations. For example, in a `LIST` op, only the `data` field is defined and
+ * `sender` and `receiver` are empty. Some operations have no fields defined.
  */
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 
@@ -49,7 +70,7 @@
 class Network
 {
 public:
-    enum OpCode
+    enum OpCode : uint32_t
     {
         // Client -> Server operations.
         CREATE,
@@ -63,26 +84,7 @@ public:
         SEND,
         LIST,
     };
-
-    struct Operation
-    {
-        int version = VERSION;
-        OpCode code;
-    };
     
-    /**
-     * Header for any data sent between the server and client.
-     */
-    struct Metadata
-    {
-        // Length of the data following this metadata header.
-        size_t dataLength;
-        // Length of the username of the sender. 0 if unused.
-        size_t senderLength;
-        // Length of the username of the receiver. 0 if unused.
-        size_t receiverLength;
-    };
-
     /**
      * Generic Message object that is passed as context to each callback. Not
      * every field of this object is defined for every operation. For some
@@ -90,6 +92,7 @@ public:
     */
     struct Message
     {
+        OpCode operation;
         std::string data;
         std::string sender;
         std::string receiver;
@@ -108,14 +111,48 @@ public:
      */
     int receiveOperation(int socket);
 
-    int sendMessage(int socket, Metadata metadata, std::string data);
+    /**
+     * Send the given `Message` object to the peer on `socket` following the
+     * wire protocol defined by this class.
+     * 
+     * Returns:
+     *      Socket send() errors.
+    */
+    int sendMessage(int socket, Message message);
 
+    /**
+     * Convenience function to send an error message to the peer.
+     * 
+     * Returns:
+     *      Socket send() errors.
+    */
+    int sendError(int socket, std::string errorMsg);
+
+    /**
+     * Save the given function `callback` to be triggered when `operation` is
+     * received by this instance.
+    */
     void register_callback(OpCode operation, callback function);
-
+    
 private:
+
+    /**
+     * Header for any data sent between the server and client.
+     */
+    struct Metadata
+    {
+        // Protocol version number.
+        uint32_t version;
+        // The requested/received operation.
+        OpCode operation;
+        // Length of the username of the sender. 0 if unused.
+        uint64_t senderLength;
+        // Length of the username of the receiver. 0 if unused.
+        uint64_t receiverLength;
+        // Length of the data following this metadata header
+        // (not including the sender/recvier information).
+        uint64_t dataLength;
+    };
+
     std::unordered_map<OpCode, callback> registered_callbacks;
-
-    int receiveMetadata(int socket, Metadata &metadataOut);
-
-    int receiveData(int socket, size_t dataLength, std::string &dataOut);
 };
