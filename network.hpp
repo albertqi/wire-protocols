@@ -5,21 +5,21 @@
  *
  * 1. Register callbacks with `Network` for each operation (`OpCode`) the user
  *    wants to handle.
- * 2. The user calls the `receiveOperation()` function for a particular 
- *    connection. When the `Network` instance receives an operation on the 
+ * 2. The user calls the `receiveOperation()` function for a particular
+ *    connection. When the `Network` instance receives an operation on the
  *    connection, the callback for that operation is triggered.
  * 3. The results of that operation can returned by the user using
  *    `sendMessage()`.
  *
- * Communication over the network and the parsing of operations, metadata, and 
+ * Communication over the network and the parsing of operations, metadata, and
  * data are handled by this class as well. Notably, this class does not initate
  * connections or handle the closing (unexepected or intentional) of connections.
  * The user of this class must handle possible `SIGPIPE`s and manage the socket
  * file descriptor.
- * 
+ *
  * Every packet sent between `Network` instances must follow the following wire
  * protocol:
- * 
+ *
  * //////// Header ////////
  * > Protocol version number (4 bytes)
  * > Operation (4 bytes)
@@ -30,18 +30,18 @@
  * > Sender information of length `senderLength` (Could be 0)
  * > Reciever information of length `recieverLength` (Could be 0)
  * > Operation data of length `dataLength`
- * 
+ *
  * Any data received by this class that does not follow the above protocol will
  * be ignored.
- * 
+ *
  * ///////////////////////////// Usage Information /////////////////////////////
- * 
+ *
  * Function information and return values:
  * All functions in `Network` return an int which is the return value of network
  * operation used in the function. If a function has an additional return value,
  * it is returned in an output parameter at the end of the argument list, marked
  * by <argumentName>Out.
- * 
+ *
  * Network return values and error codes:
  * Errors from the server to the client are returned using the `ERROR` op code.
  * The client is not allowed to send errors to the server. Normal return values
@@ -50,7 +50,7 @@
  * the client will receive a `LIST`. For any other void function such as sending
  * a message to another user, the client will receive `OK` on success, or `ERROR`
  * with a message on failure.
- * 
+ *
  * Callbacks and Receiving Data from the Client/Server:
  * When the `receiveOperation()` function is called by either the client or
  * server, the function will block until an `OpCode` is received on the
@@ -70,6 +70,7 @@
 class Network
 {
 public:
+
     enum OpCode : uint32_t
     {
         // Client -> Server operations.
@@ -84,12 +85,12 @@ public:
         SEND,
         LIST,
     };
-    
+
     /**
      * Generic Message object that is passed as context to each callback. Not
      * every field of this object is defined for every operation. For some
      * operations, no fields are defined.
-    */
+     */
     struct Message
     {
         OpCode operation;
@@ -104,7 +105,7 @@ public:
      * Waits for an operation to be received from `socket`. Triggers the
      * registered callback for that operation with the appropriate data recieved
      * from from the connection.
-     * 
+     *
      * Returns:
      *      Socket read() errors.
      *      Errors returned by the callback.
@@ -114,26 +115,26 @@ public:
     /**
      * Send the given `Message` object to the peer on `socket` following the
      * wire protocol defined by this class.
-     * 
+     *
      * Returns:
      *      Socket send() errors.
-    */
+     */
     int sendMessage(int socket, Message message);
 
     /**
      * Convenience function to send an error message to the peer.
-     * 
+     *
      * Returns:
      *      Socket send() errors.
-    */
+     */
     int sendError(int socket, std::string errorMsg);
 
     /**
      * Save the given function `callback` to be triggered when `operation` is
      * received by this instance.
-    */
+     */
     void register_callback(OpCode operation, callback function);
-    
+
 private:
 
     /**
@@ -154,5 +155,8 @@ private:
         uint64_t dataLength;
     };
 
+    /**
+     * Mappings from operations to user callbacks.
+     */
     std::unordered_map<OpCode, callback> registered_callbacks;
 };
