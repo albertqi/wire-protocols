@@ -3,80 +3,128 @@
 
 #include "network.hpp"
 
-// MAC OS and Linux have different names for wanting
+// MAC and Linux have different names for telling the OS you have more data to
+// send.
 #ifdef __linux__
     #define MSG_HAVEMORE MSG_MORE
 #endif
 
 int Network::receiveOperation(int socket)
 {
-    int r;
-    Operation op;
-    r = read(socket, &op, sizeof(op));
-    if (r < 0)
+    int err;
+    Metadata header;
+
+    // Read header from the socet.
+    err = read(socket, &header, sizeof(Metadata));
+    if (err < 0)
     {
-        return r;
+        return err;
     }
-    if (op.version != VERSION)
+    // Version checking works to both ensure that the network protocols are in
+    // agreement as well make sure that the wire protocol is being followed at
+    // all.
+    if (header.version != VERSION)
     {
         // TODO: send error to message
         return -1;
     }
-    Metadata metadata;
-    std::string data;
-    switch (op.code)
+
+    // Read sender information if available.
+    std::string sender;
+    sender.reserve(header.senderLength);
+    err = read(socket, sender.data(), header.senderLength);
+    if (err < 0)
     {
-    case CREATE:
-    case SEND:
-        r = receiveMetadata(socket, metadata);
-        if (r < 0)
-        {
-            // TODO: send err to client
-            return r;
-        }
-        break;
+        return err;
     }
-    callback func = registered_callbacks[op.code];
-    r = func(metadata, data);
-    return r;
+
+    // Read receiver information if available.
+    std::string receiver;
+    receiver.reserve(header.receiverLength);
+    err = read(socket, receiver.data(), header.receiverLength);
+    if (err < 0)
+    {
+        return err;
+    }
+
+    // Read operation data.
+    std::string data;
+    data.reserve(header.dataLength);
+    err = read(socket, data.data(), header.dataLength);
+    if (err < 0)
+    {
+        return err;
+    }
+
+    // Construct Message object
+    Message message = {
+        header.operation,
+        data,
+        sender,
+        receiver
+    };
+
+    // Check that a callback has been registered for the received operation.
+    if (registered_callbacks.find(header.operation) != registered_callbacks.end())
+    {
+        callback func = registered_callbacks[header.operation];
+        err = func(message);
+    }
+
+    return err;
 }
 
-int Network::sendMessage(int socket, Metadata metadata, std::string data)
+int Network::sendMessage(int socket, Message message)
 {
-    int r;
-    Operation op = {.code = SEND};
-    r = send(socket, &op, sizeof(op), MSG_HAVEMORE);
-    if (r < 0)
+    // Setup protocol header.
+    Metadata header = {
+        VERSION,
+        message.operation,
+        message.sender.size(),
+        message.receiver.size(),
+        message.data.size()
+    };
+
+    int err;
+    
+    // Send header.
+    err = send(socket, &header, sizeof(Metadata), MSG_HAVEMORE);
+    if (err < 0)
     {
-        return r;
+        return err;
     }
-    r = send(socket, &metadata, sizeof(metadata), MSG_HAVEMORE);
-    if (r < 0)
+    // Send sender information.
+    char* senderData = message.sender.data();
+    err = send(socket, senderData, message.sender.size(), MSG_HAVEMORE);
+    if (err < 0)
     {
-        return r;
+        return err;
     }
-    r = send(socket, &data, sizeof(data), MSG_NOSIGNAL);
-    return r;
+    // Send receiver information.
+    char* receiverData = message.receiver.data();
+    err = send(socket, receiverData, message.receiver.size(), MSG_HAVEMORE);
+    if (err < 0)
+    {
+        return err;
+    }
+    // Send the rest of the data.
+    char* data = message.data.data();
+    err = send(socket, data, message.data.size(), 0);
+
+    return err;
+}
+
+int Network::sendError(int socket, std::string errorMsg)
+{
+    Message message = {
+        ERROR,
+        errorMsg
+    };
+
+    return sendMessage(socket, message);
 }
 
 void Network::register_callback(OpCode operation, callback function)
 {
     registered_callbacks[operation] = function;
-}
-
-int Network::receiveMetadata(int socket, Metadata &metadataOut)
-{
-    Metadata recvd_metadata;
-    int r = read(socket, &recvd_metadata, sizeof(recvd_metadata));
-    
-    return r;
-}
-
-int Network::receiveData(int socket, size_t dataLength, std::string &dataOut)
-{
-    std::string recvd_data;
-    int r = read(socket, &recvd_data, dataLength);
-    dataOut = recvd_data;
-
-    return r;
 }
