@@ -65,6 +65,9 @@
 #include <string>
 #include <unordered_map>
 
+#include "server.hpp"
+#include "client.hpp"
+
 #define VERSION 1
 
 class Network
@@ -99,8 +102,6 @@ public:
         std::string receiver;
     };
 
-    typedef int (*callback)(Message);
-
     /**
      * Waits for an operation to be received from `socket`. Triggers the
      * registered callback for that operation with the appropriate data recieved
@@ -133,7 +134,7 @@ public:
      * Save the given function `callback` to be triggered when `operation` is
      * received by this instance.
      */
-    void register_callback(OpCode operation, callback function);
+    void register_callback(OpCode operation, Callback function);
 
 private:
 
@@ -158,5 +159,37 @@ private:
     /**
      * Mappings from operations to user callbacks.
      */
-    std::unordered_map<OpCode, callback> registered_callbacks;
+    std::unordered_map<OpCode, Callback> registered_callbacks;
+};
+
+class Callback
+{
+    bool isClientCallback;
+    int (Server::*serverCallback)(Network::Message);
+    int (Client::*clientCallback)(Network::Message);
+
+    Client* client;
+    Server* server;
+
+    Callback(Server* instance, int (Server::*func)(Network::Message))
+    {
+        isClientCallback = false;
+    }
+
+    Callback(Client* instance, int (Client::*func)(Network::Message))
+    {
+        isClientCallback = true;
+    }
+
+    int Callback::operator()(Network::Message message)
+    {
+        if (isClientCallback)
+        {
+            return (client->*clientCallback)(message);
+        }
+        else
+        {
+            return (server->*serverCallback)(message);
+        }
+    }
 };

@@ -4,9 +4,14 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <unordered_map>
+#include <string>
+#include <mutex>
+
 #define PORT 8080
 
-class Server {
+class Server
+{
     /*
     start server
     stop server
@@ -16,6 +21,42 @@ class Server {
     list accounts
     send message to user
     */
+
+public:
+    Server(int port)
+    {
+        serverFd = socket(AF_INET, SOCK_STREAM, 0);
+        if (serverFd < 0)
+        {
+            perror("socket()");
+            exit(1);
+        }
+        struct sockaddr_in address;
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = INADDR_ANY;
+        address.sin_port = htons(port);
+
+        if (bind(serverFd, (struct sockaddr *)&address, sizeof(address)) < 0)
+        {
+            perror("bind()");
+            exit(1);
+        }
+
+        if (listen(serverFd, 3) < 0)
+        {
+            perror("listen()");
+            exit(1);
+        }
+    }
+
+    
+
+private:
+    int serverFd;
+
+    std::unordered_map<std::string, int> activeSockets;
+
+    std::unordered_map<int, std::mutex> socketLocks;
 };
 
 int main(int argc, char const *argv[])
