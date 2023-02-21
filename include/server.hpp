@@ -29,9 +29,9 @@ public:
 
     Network::Message listAccounts(Network::Message requester);
 
-    // Network::Message deleteAccount(Network::Message requester);
+    Network::Message deleteAccount(Network::Message requester);
 
-    // Network::Message sendMessage(Network::Message message);
+    Network::Message sendMessage(Network::Message message);
     
 private:
     int serverFd;

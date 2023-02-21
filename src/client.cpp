@@ -27,7 +27,7 @@ Client::Client(std::string host, int port)
         exit(1);
     }
 
-    if (connect(clientFd, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0)
+    if (connect(clientFd, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
     {
         perror("connect()");
         exit(1);
@@ -54,14 +54,22 @@ void Client::getAccountList()
     network.sendMessage(clientFd, {Network::LIST});
 }
 
-int main(int argc, char const* argv[])
+void Client::deleteAccount(std::string username)
+{
+    network.sendMessage(clientFd, {Network::DELETE, username});
+}
+
+int main(int argc, char const *argv[])
 {
     Client client("127.0.0.1", 1111);
 
     client.createAccount("testUser");
+    client.createAccount("testUser2");
+    client.getAccountList();
+    client.deleteAccount("testUser2");
     client.getAccountList();
 
-    while(true)
+    while (true)
     {
         client.network.receiveOperation(client.clientFd);
     }

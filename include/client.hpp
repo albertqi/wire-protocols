@@ -5,7 +5,6 @@
 class Client
 {
 public:
-
     Client(std::string host, int port);
 
     Network::Message messageCallback(Network::Message message);
@@ -14,11 +13,10 @@ public:
 
     void getAccountList();
 
+    void deleteAccount(std::string username);
+
     Network network;
     int clientFd;
 
-
 private:
-
-
 };

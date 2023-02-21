@@ -24,7 +24,7 @@ Server::Server(int port)
         perror("setsockopt()");
         exit(1);
     }
-    
+
     struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
@@ -47,8 +47,8 @@ Server::Server(int port)
 
     // Register callbacks.
     network.registerCallback(Network::CREATE, Callback(this, &Server::createAccount));
-    // network.registerCallback(Network::DELETE, Callback(this, &Server::deleteAccount));
-    // network.registerCallback(Network::SEND, Callback(this, &Server::sendMessage));
+    network.registerCallback(Network::DELETE, Callback(this, &Server::deleteAccount));
+    network.registerCallback(Network::SEND, Callback(this, &Server::sendMessage));
     network.registerCallback(Network::LIST, Callback(this, &Server::listAccounts));
 
     serverRunning = true;
@@ -72,23 +72,43 @@ Network::Message Server::createAccount(Network::Message info)
         return {Network::ERROR, "User already exists"};
     }
 
-    std::cout << "Creating new account:" << newUser << "\n";
+    std::cout << "Creating new account: " << newUser << "\n";
     userList.insert(newUser);
 
-    return {Network::OK};
+    return {Network::OK, "Created account " + newUser};
 }
 
 Network::Message Server::listAccounts(Network::Message requester)
 {
     std::string result;
-    std::cout << "Sending account list" << "\n";
+    std::cout << "Sending account list...\n";
 
-    for (auto& user : this->userList)
+    for (auto &user : this->userList)
     {
-        result += user + "\n";
+        result += user + ",";
     }
 
     return {Network::OK, result};
+}
+
+Network::Message Server::deleteAccount(Network::Message requester)
+{
+    std::string user = requester.data;
+
+    if (userList.find(user) == userList.end())
+    {
+        return {Network::ERROR, "User does not exist"};
+    }
+
+    std::cout << "Deleting account: " << user << "\n";
+    userList.erase(user);
+
+    return {Network::OK, "Deleted account " + user};
+}
+
+Network::Message Server::sendMessage(Network::Message message)
+{
+    return Network::Message();
 }
 
 int Server::acceptClient()
@@ -98,7 +118,7 @@ int Server::acceptClient()
     size_t addressLength;
 
     addressLength = sizeof(address);
-    clientSocket = accept(serverFd, (struct sockaddr *)&address, 
+    clientSocket = accept(serverFd, (struct sockaddr *)&address,
                           (socklen_t *)&addressLength);
     if (clientSocket < 0)
     {
@@ -125,8 +145,8 @@ int Server::processClient(int socket)
 
 int main(int argc, char const *argv[])
 {
-    Server server (1111);
-    
+    Server server(1111);
+
     while (true)
     {
         int err = server.acceptClient();
