@@ -4,12 +4,14 @@ Callback::Callback(Server* instance, Network::Message (Server::*func)(Network::M
 {
     isClientCallback = false;
     serverCallback = func;
+    server = instance;
 }
 
 Callback::Callback(Client* instance, Network::Message (Client::*func)(Network::Message))
 {
     isClientCallback = true;
     clientCallback = func;
+    client = instance;
 }
 
 Network::Message Callback::operator()(Network::Message message)
