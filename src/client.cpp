@@ -5,8 +5,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <iostream>
+#include <thread>
 
 #include "client.hpp"
+
+std::string currentUser;
 
 Client::Client(std::string host, int port)
 {
@@ -35,12 +38,20 @@ Client::Client(std::string host, int port)
 
     // Register callbacks
     network.registerCallback(Network::OK, Callback(this, &Client::messageCallback));
+    network.registerCallback(Network::CREATE, Callback(this, &Client::handleCreateResponse));
     network.registerCallback(Network::ERROR, Callback(this, &Client::messageCallback));
 }
 
 Network::Message Client::messageCallback(Network::Message message)
 {
     std::cout << "Message recv'd: " << message.data << "\n";
+    return {Network::NO_RETURN};
+}
+
+Network::Message Client::handleCreateResponse(Network::Message message)
+{
+    std::cout << "Message recv'd: Created account " << message.data << "\n";
+    currentUser = message.data;
     return {Network::NO_RETURN};
 }
 
@@ -69,10 +80,42 @@ int main(int argc, char const *argv[])
     client.deleteAccount("testUser2");
     client.getAccountList();
 
-    while (true)
+    std::atomic<bool> clientRunning = true;
+    std::string buffer;
+
+    std::thread t([&clientRunning](Client client)
+                  { while (clientRunning){
+                    client.network.receiveOperation(client.clientFd);
+                    } },
+                  client);
+
+    while (clientRunning)
     {
-        client.network.receiveOperation(client.clientFd);
+        std::cin >> buffer;
+        if (buffer == "exit")
+        {
+            clientRunning = false;
+        }
+        else if (buffer == "login")
+        {
+            std::cin >> buffer;
+            std::cout << buffer << std::endl;
+        }
+        else if (buffer == "create")
+        {
+            std::cin >> buffer;
+            client.createAccount(buffer);
+        }
+        else if (buffer == "delete")
+        {
+            client.deleteAccount(currentUser);
+        }
+        else if (buffer == "list")
+        {
+            client.getAccountList();
+        }
     }
 
+    t.join();
     return 0;
 }

@@ -9,6 +9,8 @@ public:
 
     Network::Message messageCallback(Network::Message message);
 
+    Network::Message handleCreateResponse(Network::Message message);
+
     void createAccount(std::string username);
 
     void getAccountList();

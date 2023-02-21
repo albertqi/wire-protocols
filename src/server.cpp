@@ -75,7 +75,7 @@ Network::Message Server::createAccount(Network::Message info)
     std::cout << "Creating new account: " << newUser << "\n";
     userList.insert(newUser);
 
-    return {Network::OK, "Created account " + newUser};
+    return {Network::CREATE, newUser};
 }
 
 Network::Message Server::listAccounts(Network::Message requester)
@@ -103,7 +103,7 @@ Network::Message Server::deleteAccount(Network::Message requester)
     std::cout << "Deleting account: " << user << "\n";
     userList.erase(user);
 
-    return {Network::OK, "Deleted account " + user};
+    return {Network::OK};
 }
 
 Network::Message Server::sendMessage(Network::Message message)
