@@ -6,46 +6,66 @@
 #include <unistd.h>
 #include <iostream>
 
-#include "network.hpp"
+#include "client.hpp"
 
-#define PORT 8080
- 
-int callback_test(Network::Message message)
+Client::Client(std::string host, int port)
 {
-    std::cout << "Message:\n" << message.data << "\n";
+    struct sockaddr_in serverAddress;
+
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(port);
+    if (inet_pton(AF_INET, host.c_str(), &serverAddress.sin_addr) <= 0)
+    {
+        perror("inet_pton()");
+        exit(1);
+    }
+
+    clientFd = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientFd < 0)
+    {
+        perror("socket()");
+        exit(1);
+    }
+
+    if (connect(clientFd, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0)
+    {
+        perror("connect()");
+        exit(1);
+    }
+
+    // Register callbacks
+    network.registerCallback(Network::OK, Callback(this, &Client::messageCallback));
+    network.registerCallback(Network::ERROR, Callback(this, &Client::messageCallback));
+}
+
+Network::Message Client::messageCallback(Network::Message message)
+{
+    std::cout << "Message recv'd: " << message.data << "\n";
+    return Network::Message();
+}
+
+void Client::createAccount(std::string username)
+{
+    network.sendMessage(clientFd, {Network::CREATE, username});
+}
+
+
+void Client::getAccountList()
+{
+    network.sendMessage(clientFd, {Network::LIST});
 }
 
 int main(int argc, char const* argv[])
 {
-    int sock = 0, valread, client_fd;
-    struct sockaddr_in serv_addr;
-    
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("socket()");
-        return -1;
-    }
- 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
- 
-    // Convert IPv4 and IPv6 addresses from text to binary
-    // form
-    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)
-        <= 0) {
-        perror("inet_pton()");
-        return -1;
-    }
- 
-    client_fd = connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
-    if (client_fd < 0) {
-        perror("connect()");
-        return -1;
-    }
-    
-    Network network;
-    network.register_callback(Network::OpCode::LIST, callback_test);
- 
-    while (1)
+    Client client("127.0.0.1", 1111);
+
+    client.createAccount("testUser");
+    client.getAccountList();
+
+    while(true)
     {
+
     }
+
+    return 0;
 }

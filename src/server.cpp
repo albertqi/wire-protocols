@@ -1,116 +1,138 @@
-#include <netinet/in.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
+#include <signal.h>
 #include <unistd.h>
-#include <unordered_map>
-#include <string>
-#include <mutex>
 
-#define PORT 8080
+#include <netinet/in.h>
+#include <sys/socket.h>
 
-class Server
+#include "server.hpp"
+
+Server::Server(int port)
 {
-    /*
-    start server
-    stop server
-    accept connection (spawn thread)
-    create account
-    delete account
-    list accounts
-    send message to user
-    */
-
-public:
-    Server(int port)
+    serverFd = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverFd < 0)
     {
-        serverFd = socket(AF_INET, SOCK_STREAM, 0);
-        if (serverFd < 0)
-        {
-            perror("socket()");
-            exit(1);
-        }
-        struct sockaddr_in address;
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY;
-        address.sin_port = htons(port);
+        perror("socket()");
+        exit(1);
+    }
+    int enable = 1;
+    if (setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+    {
+        perror("setsockopt()");
+        exit(1);
+    }
+    
+    struct sockaddr_in address;
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(port);
 
-        if (bind(serverFd, (struct sockaddr *)&address, sizeof(address)) < 0)
-        {
-            perror("bind()");
-            exit(1);
-        }
-
-        if (listen(serverFd, 3) < 0)
-        {
-            perror("listen()");
-            exit(1);
-        }
+    if (bind(serverFd, (struct sockaddr *)&address, sizeof(address)) < 0)
+    {
+        perror("bind()");
+        exit(1);
     }
 
-    
+    if (listen(serverFd, 3) < 0)
+    {
+        perror("listen()");
+        exit(1);
+    }
 
-private:
-    int serverFd;
+    // Ignore SIGPIPE on unexpected client disconnects.
+    signal(SIGPIPE, SIG_IGN);
 
-    std::unordered_map<std::string, int> activeSockets;
+    // Register callbacks.
+    network.registerCallback(Network::CREATE, Callback(this, &Server::createAccount));
+    // network.registerCallback(Network::DELETE, Callback(this, &Server::deleteAccount));
+    // network.registerCallback(Network::SEND, Callback(this, &Server::sendMessage));
+    network.registerCallback(Network::LIST, Callback(this, &Server::listAccounts));
 
-    std::unordered_map<int, std::mutex> socketLocks;
-};
+    serverRunning = true;
+}
+
+void Server::stopServer()
+{
+    serverRunning = false;
+}
+
+Network::Message Server::createAccount(Network::Message info)
+{
+    std::string newUser = info.data;
+    if (newUser.size() == 0)
+    {
+        return {Network::ERROR, "No username provided"};
+    }
+
+    if (userList.find(newUser) != userList.end())
+    {
+        return {Network::ERROR, "User already exists"};
+    }
+
+    userList.insert(newUser);
+
+    return {Network::OK};
+}
+
+Network::Message Server::listAccounts(Network::Message requester)
+{
+    std::string result;
+
+    for (auto& user : this->userList)
+    {
+        result += user + "\n";
+    }
+
+    return {Network::OK, result};
+}
+
+int Server::acceptClient()
+{
+    int clientSocket;
+    struct sockaddr_in address;
+    size_t addressLength;
+
+    addressLength = sizeof(address);
+    clientSocket = accept(serverFd, (struct sockaddr *)&address, 
+                          (socklen_t *)&addressLength);
+    if (clientSocket < 0)
+    {
+        perror("accept()");
+        return clientSocket;
+    }
+
+    socketThreads[clientSocket] = std::thread(&Server::processClient, this, clientSocket);
+
+    return 0;
+}
+
+int Server::processClient(int socket)
+{
+    while (serverRunning)
+    {
+        network.receiveOperation(socket);
+    }
+
+    close(socket);
+
+    return 0;
+}
 
 int main(int argc, char const *argv[])
 {
-    int server_fd, new_socket, valread;
-    struct sockaddr_in address;
-    int opt = 1;
-    int addrlen = sizeof(address);
-    char buffer[1024] = {0};
-    char *hello = "Hello from server";
-
-    // Creating socket file descriptor
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-        perror("socket failed");
-        exit(EXIT_FAILURE);
-    }
-
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
-
-    // Forcefully attaching socket to the port 8080
-    if (bind(server_fd, (struct sockaddr *)&address,
-             sizeof(address)) < 0)
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-    if (listen(server_fd, 3) < 0)
-    {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address,
-                             (socklen_t *)&addrlen)) < 0)
-    {
-        perror("accept");
-        exit(EXIT_FAILURE);
-    }
-
-    char *login = "Login";
+    Server server (1111);
+    
     while (true)
     {
-        send(new_socket, login, strlen(login), 0);
-        valread = read(new_socket, buffer, 1024);
-        printf("%s\n", buffer);
-        send(new_socket, hello, strlen(hello), 0);
-        printf("Hello message sent\n");
+        int err = server.acceptClient();
+        if (err < 0)
+        {
+            std::cerr << "Failed client connection" << std::endl;
+        }
     }
 
-    // closing the connected socket
-    close(new_socket);
-    // closing the listening socket
-    shutdown(server_fd, SHUT_RDWR);
     return 0;
 }
