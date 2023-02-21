@@ -14,9 +14,11 @@ public:
 
     void getAccountList();
 
-private:
-
+    Network network;
     int clientFd;
 
-    Network network;
+
+private:
+
+
 };

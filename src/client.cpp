@@ -41,14 +41,13 @@ Client::Client(std::string host, int port)
 Network::Message Client::messageCallback(Network::Message message)
 {
     std::cout << "Message recv'd: " << message.data << "\n";
-    return Network::Message();
+    return {Network::NO_RETURN};
 }
 
 void Client::createAccount(std::string username)
 {
     network.sendMessage(clientFd, {Network::CREATE, username});
 }
-
 
 void Client::getAccountList()
 {
@@ -64,7 +63,7 @@ int main(int argc, char const* argv[])
 
     while(true)
     {
-
+        client.network.receiveOperation(client.clientFd);
     }
 
     return 0;

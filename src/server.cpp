@@ -72,6 +72,7 @@ Network::Message Server::createAccount(Network::Message info)
         return {Network::ERROR, "User already exists"};
     }
 
+    std::cout << "Creating new account:" << newUser << "\n";
     userList.insert(newUser);
 
     return {Network::OK};
@@ -80,6 +81,7 @@ Network::Message Server::createAccount(Network::Message info)
 Network::Message Server::listAccounts(Network::Message requester)
 {
     std::string result;
+    std::cout << "Sending account list" << "\n";
 
     for (auto& user : this->userList)
     {
