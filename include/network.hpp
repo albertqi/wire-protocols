@@ -91,8 +91,9 @@ public:
 
         // Client -> Server operations.
         // Contains data.
-        CREATE, // Contains data
-        DELETE, // Contains data
+        CREATE,  // Contains data
+        DELETE,  // Contains data
+        REQUEST, // Contains data
 
         // Bi-directional operations.
         SEND, // Contains data, sender, receiver

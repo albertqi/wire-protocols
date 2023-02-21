@@ -50,6 +50,7 @@ Server::Server(int port)
     network.registerCallback(Network::DELETE, Callback(this, &Server::deleteAccount));
     network.registerCallback(Network::SEND, Callback(this, &Server::sendMessage));
     network.registerCallback(Network::LIST, Callback(this, &Server::listAccounts));
+    network.registerCallback(Network::REQUEST, Callback(this, &Server::requestMessages));
 
     serverRunning = true;
 }
@@ -108,7 +109,26 @@ Network::Message Server::deleteAccount(Network::Message requester)
 
 Network::Message Server::sendMessage(Network::Message message)
 {
-    return Network::Message();
+    messages[message.receiver].push(message);
+
+    return {Network::SEND};
+}
+
+Network::Message Server::requestMessages(Network::Message message)
+{
+    std::string username = message.data;
+
+    std::string result;
+    std::cout << "Sending messages for " << username << "...\n";
+
+    while (!messages[username].empty())
+    {
+        Network::Message msg = messages[username].front();
+        messages[username].pop();
+        result += msg.sender + ": " + msg.data + "\n";
+    }
+
+    return {Network::SEND, result};
 }
 
 int Server::acceptClient()

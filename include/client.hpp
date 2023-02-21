@@ -17,11 +17,15 @@ public:
 
     Network::Message handleList(Network::Message message);
 
+    Network::Message handleReceive(Network::Message message);
+
     void createAccount(std::string username);
 
     void getAccountList();
 
     void deleteAccount(std::string username);
+
+    void sendMsg(Network::Message message);
 
     void stopClient();
 

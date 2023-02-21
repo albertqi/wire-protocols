@@ -7,6 +7,7 @@
 #include <iostream>
 #include <thread>
 #include <atomic>
+#include <chrono>
 
 #include "client.hpp"
 
@@ -39,6 +40,7 @@ Client::Client(std::string host, int port)
     network.registerCallback(Network::OK, Callback(this, &Client::messageCallback));
     network.registerCallback(Network::CREATE, Callback(this, &Client::handleCreateResponse));
     network.registerCallback(Network::LIST, Callback(this, &Client::handleList));
+    network.registerCallback(Network::SEND, Callback(this, &Client::handleReceive));
     network.registerCallback(Network::ERROR, Callback(this, &Client::messageCallback));
 }
 
@@ -73,6 +75,17 @@ Network::Message Client::handleList(Network::Message message)
     return {Network::NO_RETURN};
 }
 
+Network::Message Client::handleReceive(Network::Message message)
+{
+    if (message.data.size() <= 0)
+    {
+        return {Network::NO_RETURN};
+    }
+    std::cout << "You have mail!" << std::endl;
+    std::cout << message.data;
+    return {Network::NO_RETURN};
+}
+
 void Client::createAccount(std::string username)
 {
     network.sendMessage(clientFd, {Network::CREATE, username});
@@ -88,6 +101,11 @@ void Client::deleteAccount(std::string username)
     network.sendMessage(clientFd, {Network::DELETE, username});
 }
 
+void Client::sendMsg(Network::Message message)
+{
+    network.sendMessage(clientFd, message);
+}
+
 void Client::stopClient()
 {
     close(clientFd);
@@ -97,19 +115,20 @@ int main(int argc, char const *argv[])
 {
     Client client("127.0.0.1", 1111);
 
-    client.createAccount("testUser");
-    client.createAccount("testUser2");
-    client.getAccountList();
-    client.deleteAccount("testUser2");
-    client.getAccountList();
-
     std::atomic<bool> clientRunning = true;
     std::string buffer;
 
-    std::thread t([&clientRunning, &client]()
-                  { while (clientRunning){
+    std::thread op_thread([&clientRunning, &client]()
+                          { while (clientRunning){
                     client.network.receiveOperation(client.clientFd);
                     } });
+
+    std::thread msg_thread([&clientRunning, &client]()
+                           {
+                                       while (clientRunning){
+                               client.network.sendMessage(client.clientFd, {Network::REQUEST, client.currentUser});
+                               std::this_thread::sleep_for(std::chrono::seconds(2));
+                               } });
 
     while (clientRunning)
     {
@@ -140,6 +159,11 @@ int main(int argc, char const *argv[])
         }
         else if (buffer == "delete")
         {
+            if (client.currentUser.size() <= 0)
+            {
+                std::cout << "Not logged in" << std::endl;
+                continue;
+            }
             client.deleteAccount(client.currentUser);
         }
         else if (buffer == "list")
@@ -155,8 +179,31 @@ int main(int argc, char const *argv[])
             }
             std::cout << list;
         }
+        else if (buffer == "send")
+        {
+            std::cin >> buffer;
+            if (client.currentUser.size() <= 0)
+            {
+                std::cout << "Not logged in" << std::endl;
+                continue;
+            }
+            std::unique_lock lock(client.m);
+            client.getAccountList();
+            client.cv.wait(lock);
+            if (client.clientUserList.find(buffer) == client.clientUserList.end())
+            {
+                std::cout << "Recipient does not exist" << std::endl;
+                continue;
+            }
+            std::string message;
+            std::cout << "Send message: ";
+            std::cin.ignore();
+            std::getline(std::cin, message);
+            client.sendMsg({Network::SEND, message, client.currentUser, buffer});
+        }
     }
 
-    t.join();
+    op_thread.join();
+    msg_thread.join();
     return 0;
 }

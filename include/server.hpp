@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <queue>
 
 #include "network.hpp"
 
@@ -32,7 +33,9 @@ public:
     Network::Message deleteAccount(Network::Message requester);
 
     Network::Message sendMessage(Network::Message message);
-    
+
+    Network::Message requestMessages(Network::Message message);
+
 private:
     int serverFd;
 
@@ -40,11 +43,15 @@ private:
 
     std::unordered_set<std::string> userList;
 
-    std::unordered_map<std::string, int> activeSockets;
+    std::unordered_map<int, std::string> activeSockets;
 
     std::unordered_map<int, std::mutex> socketLocks;
 
     std::unordered_map<int, std::thread> socketThreads;
+
+    std::unordered_map<std::string, std::queue<Network::Message>> messages;
+
+    std::unordered_set<std::string> activeUsers;
 
     Network network;
 
