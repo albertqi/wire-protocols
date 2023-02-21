@@ -25,32 +25,29 @@ int Network::receiveOperation(int socket)
     // all.
     if (header.version != VERSION)
     {
-        // TODO: send error to message
+        sendError(socket, "Incompatible protocol version.");
         return -1;
     }
 
     // Read sender information if available.
-    std::string sender;
-    sender.reserve(header.senderLength);
-    err = read(socket, sender.data(), header.senderLength);
+    std::string sender(header.senderLength, 0);
+    err = read(socket, &sender[0], header.senderLength);
     if (err < 0)
     {
         return err;
     }
 
     // Read receiver information if available.
-    std::string receiver;
-    receiver.reserve(header.receiverLength);
-    err = read(socket, receiver.data(), header.receiverLength);
+    std::string receiver(header.receiverLength, 0);
+    err = read(socket, &receiver[0], header.receiverLength);
     if (err < 0)
     {
         return err;
     }
 
     // Read operation data.
-    std::string data;
-    data.reserve(header.dataLength);
-    err = read(socket, data.data(), header.dataLength);
+    std::string data(header.dataLength, 0);
+    err = read(socket, &data[0], header.dataLength);
     if (err < 0)
     {
         return err;
@@ -63,12 +60,24 @@ int Network::receiveOperation(int socket)
         sender,
         receiver
     };
+    Message output;
 
     // Check that a callback has been registered for the received operation.
     if (registered_callbacks.find(header.operation) != registered_callbacks.end())
     {
-        callback func = registered_callbacks[header.operation];
-        err = func(message);
+        
+        Callback func = registered_callbacks.at(header.operation);
+        output = func(message);
+        if (output.operation != NO_RETURN)
+        {
+            err = sendMessage(socket, output);
+        }
+    }
+    // Otherwise return an unsupported operation message.
+    else
+    {
+        Message unsupportedOp = {UNSUPPORTED_OP};
+        err = sendMessage(socket, unsupportedOp);
     }
 
     return err;
@@ -124,7 +133,7 @@ int Network::sendError(int socket, std::string errorMsg)
     return sendMessage(socket, message);
 }
 
-void Network::register_callback(OpCode operation, callback function)
+void Network::registerCallback(OpCode operation, Callback function)
 {
-    registered_callbacks[operation] = function;
+    registered_callbacks.insert(std::make_pair(operation, function));
 }
