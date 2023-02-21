@@ -61,38 +61,53 @@
  * `sender` and `receiver` are empty. Some operations have no fields defined.
  */
 
+#pragma once
+
 #include <cstdint>
 #include <string>
 #include <unordered_map>
 
-#include "server.hpp"
-#include "client.hpp"
-
 #define VERSION 1
+
+// Forward declare Client and Server so the Network class can register callbacks.
+class Server;
+class Client;
+class Callback;
 
 class Network
 {
 public:
 
+    /**
+     * Defines the possible operations defined by this wire protocol. Each
+     * operation is annotated with what part of `Message` is defined when
+     * `receiveOperation` is called.
+    */
     enum OpCode : uint32_t
     {
-        // Client -> Server operations.
-        CREATE,
-        DELETE,
-
         // Server -> Client operations.
-        ERROR,
-        OK,
+        OK, // Contains data.
+        ERROR, // Contains data.
+
+        // Client -> Server operations.
+        // Contains data.
+        CREATE, // Contains data
+        DELETE, // Contains data
 
         // Bi-directional operations.
-        SEND,
+        SEND, // Contains data, sender, receiver
         LIST,
+
+        // Other
+        UNSUPPORTED_OP,
+        NO_RETURN
     };
 
     /**
      * Generic Message object that is passed as context to each callback. Not
      * every field of this object is defined for every operation. For some
-     * operations, no fields are defined.
+     * operations, no fields are defined. A default generated `Message` object
+     * is valid and is a simple `OK` operation.
      */
     struct Message
     {
@@ -107,9 +122,8 @@ public:
      * registered callback for that operation with the appropriate data recieved
      * from from the connection.
      *
-     * Returns:
-     *      Socket read() errors.
-     *      Errors returned by the callback.
+     * @return  Socket read() errors.
+     *          Errors returned by the callback.
      */
     int receiveOperation(int socket);
 
@@ -117,16 +131,14 @@ public:
      * Send the given `Message` object to the peer on `socket` following the
      * wire protocol defined by this class.
      *
-     * Returns:
-     *      Socket send() errors.
+     * @return  Socket send() errors.
      */
     int sendMessage(int socket, Message message);
 
     /**
      * Convenience function to send an error message to the peer.
      *
-     * Returns:
-     *      Socket send() errors.
+     * @return  Socket send() errors.
      */
     int sendError(int socket, std::string errorMsg);
 
@@ -134,7 +146,7 @@ public:
      * Save the given function `callback` to be triggered when `operation` is
      * received by this instance.
      */
-    void register_callback(OpCode operation, Callback function);
+    void registerCallback(OpCode operation, Callback function);
 
 private:
 
@@ -162,34 +174,25 @@ private:
     std::unordered_map<OpCode, Callback> registered_callbacks;
 };
 
+/**
+ * Common wrapper class for `Server` and `Client` member functions.
+*/
 class Callback
 {
+public:
+
+    Callback(Server* instance, Network::Message (Server::*func)(Network::Message));
+
+    Callback(Client* instance, Network::Message (Client::*func)(Network::Message));
+
+    Network::Message operator()(Network::Message message);
+
+private:
+
     bool isClientCallback;
-    int (Server::*serverCallback)(Network::Message);
-    int (Client::*clientCallback)(Network::Message);
+    Network::Message (Server::*serverCallback)(Network::Message);
+    Network::Message (Client::*clientCallback)(Network::Message);
 
     Client* client;
     Server* server;
-
-    Callback(Server* instance, int (Server::*func)(Network::Message))
-    {
-        isClientCallback = false;
-    }
-
-    Callback(Client* instance, int (Client::*func)(Network::Message))
-    {
-        isClientCallback = true;
-    }
-
-    int Callback::operator()(Network::Message message)
-    {
-        if (isClientCallback)
-        {
-            return (client->*clientCallback)(message);
-        }
-        else
-        {
-            return (server->*serverCallback)(message);
-        }
-    }
 };
