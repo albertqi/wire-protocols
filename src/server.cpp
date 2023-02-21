@@ -85,10 +85,10 @@ Network::Message Server::listAccounts(Network::Message requester)
 
     for (auto &user : this->userList)
     {
-        result += user + ",";
+        result += user + "\n";
     }
 
-    return {Network::OK, result};
+    return {Network::LIST, result};
 }
 
 Network::Message Server::deleteAccount(Network::Message requester)

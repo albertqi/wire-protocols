@@ -6,10 +6,9 @@
 #include <unistd.h>
 #include <iostream>
 #include <thread>
+#include <atomic>
 
 #include "client.hpp"
-
-std::string currentUser;
 
 Client::Client(std::string host, int port)
 {
@@ -39,6 +38,7 @@ Client::Client(std::string host, int port)
     // Register callbacks
     network.registerCallback(Network::OK, Callback(this, &Client::messageCallback));
     network.registerCallback(Network::CREATE, Callback(this, &Client::handleCreateResponse));
+    network.registerCallback(Network::LIST, Callback(this, &Client::handleList));
     network.registerCallback(Network::ERROR, Callback(this, &Client::messageCallback));
 }
 
@@ -50,8 +50,26 @@ Network::Message Client::messageCallback(Network::Message message)
 
 Network::Message Client::handleCreateResponse(Network::Message message)
 {
-    std::cout << "Message recv'd: Created account " << message.data << "\n";
+    std::cout << "Created account " << message.data << "\n";
     currentUser = message.data;
+    return {Network::NO_RETURN};
+}
+
+Network::Message Client::handleList(Network::Message message)
+{
+    clientUserList.clear();
+    size_t pos = 0;
+    while ((pos = message.data.find("\n")) != std::string::npos)
+    {
+        std::string user = message.data.substr(0, pos);
+        if (user.size() <= 0)
+        {
+            break;
+        }
+        clientUserList.insert(user);
+        message.data.erase(0, pos + 1);
+    }
+    cv.notify_all();
     return {Network::NO_RETURN};
 }
 
@@ -70,6 +88,11 @@ void Client::deleteAccount(std::string username)
     network.sendMessage(clientFd, {Network::DELETE, username});
 }
 
+void Client::stopClient()
+{
+    close(clientFd);
+}
+
 int main(int argc, char const *argv[])
 {
     Client client("127.0.0.1", 1111);
@@ -83,11 +106,10 @@ int main(int argc, char const *argv[])
     std::atomic<bool> clientRunning = true;
     std::string buffer;
 
-    std::thread t([&clientRunning](Client client)
+    std::thread t([&clientRunning, &client]()
                   { while (clientRunning){
                     client.network.receiveOperation(client.clientFd);
-                    } },
-                  client);
+                    } });
 
     while (clientRunning)
     {
@@ -95,11 +117,21 @@ int main(int argc, char const *argv[])
         if (buffer == "exit")
         {
             clientRunning = false;
+            client.stopClient();
         }
         else if (buffer == "login")
         {
             std::cin >> buffer;
-            std::cout << buffer << std::endl;
+            std::unique_lock lock(client.m);
+            client.getAccountList();
+            client.cv.wait(lock);
+            if (client.clientUserList.find(buffer) == client.clientUserList.end())
+            {
+                std::cout << "User does not exist" << std::endl;
+                continue;
+            }
+            client.currentUser = buffer;
+            std::cout << "Logged in as " << client.currentUser << std::endl;
         }
         else if (buffer == "create")
         {
@@ -108,11 +140,20 @@ int main(int argc, char const *argv[])
         }
         else if (buffer == "delete")
         {
-            client.deleteAccount(currentUser);
+            client.deleteAccount(client.currentUser);
         }
         else if (buffer == "list")
         {
+            std::unique_lock lock(client.m);
             client.getAccountList();
+            client.cv.wait(lock);
+
+            std::string list;
+            for (std::string user : client.clientUserList)
+            {
+                list += user + "\n";
+            }
+            std::cout << list;
         }
     }
 
