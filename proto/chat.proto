@@ -44,5 +44,5 @@ service ChatService {
     rpc DeleteAccount(Username) returns (Response);
     rpc ListAccoutns(Empty) returns (ListResponse);
     rpc SendMessage(Message) returns (Response);
-    rpc MessageStream(Empty) returns (stream Message);
+    rpc MessageStream(Username) returns (stream Message);
 }

@@ -1,140 +1,48 @@
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <unistd.h>
-
-#include <netinet/in.h>
-#include <sys/socket.h>
 
 #include "server.hpp"
 
-Server::Server(int port)
+#include <grpcpp/server_builder.h>
+#include <grpcpp/server_context.h>
+
+grpc::Status Server::CreateAccount(grpc::ServerContext *context, const Username *request, Response *response)
 {
-    serverFd = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverFd < 0)
-    {
-        perror("socket()");
-        exit(1);
-    }
-    int enable = 1;
-    if (setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
-    {
-        perror("setsockopt()");
-        exit(1);
-    }
-    
-    struct sockaddr_in address;
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(port);
-
-    if (bind(serverFd, (struct sockaddr *)&address, sizeof(address)) < 0)
-    {
-        perror("bind()");
-        exit(1);
-    }
-
-    if (listen(serverFd, 3) < 0)
-    {
-        perror("listen()");
-        exit(1);
-    }
-
-    // Ignore SIGPIPE on unexpected client disconnects.
-    signal(SIGPIPE, SIG_IGN);
-
-    // Register callbacks.
-    network.registerCallback(Network::CREATE, Callback(this, &Server::createAccount));
-    // network.registerCallback(Network::DELETE, Callback(this, &Server::deleteAccount));
-    // network.registerCallback(Network::SEND, Callback(this, &Server::sendMessage));
-    network.registerCallback(Network::LIST, Callback(this, &Server::listAccounts));
-
-    serverRunning = true;
+    return grpc::Status::OK;
 }
 
-void Server::stopServer()
+grpc::Status Server::DeleteAccount(grpc::ServerContext *context, const Username *request, Response *response)
 {
-    serverRunning = false;
+    return grpc::Status::OK;
 }
 
-Network::Message Server::createAccount(Network::Message info)
+grpc::Status Server::ListAccoutns(grpc::ServerContext *context, const Empty *request, ListResponse *response)
 {
-    std::string newUser = info.data;
-    if (newUser.size() == 0)
-    {
-        return {Network::ERROR, "No username provided"};
-    }
-
-    if (userList.find(newUser) != userList.end())
-    {
-        return {Network::ERROR, "User already exists"};
-    }
-
-    std::cout << "Creating new account:" << newUser << "\n";
-    userList.insert(newUser);
-
-    return {Network::OK};
+    return grpc::Status::OK;
 }
 
-Network::Message Server::listAccounts(Network::Message requester)
+grpc::Status Server::SendMessage(grpc::ServerContext *context, const Message *request, Response *response)
 {
-    std::string result;
-    std::cout << "Sending account list" << "\n";
-
-    for (auto& user : this->userList)
-    {
-        result += user + "\n";
-    }
-
-    return {Network::OK, result};
+    return grpc::Status::OK;
 }
 
-int Server::acceptClient()
+grpc::Status Server::MessageStream(grpc::ServerContext *context, const Empty *request, grpc::ServerWriter<::Message> *writer)
 {
-    int clientSocket;
-    struct sockaddr_in address;
-    size_t addressLength;
-
-    addressLength = sizeof(address);
-    clientSocket = accept(serverFd, (struct sockaddr *)&address, 
-                          (socklen_t *)&addressLength);
-    if (clientSocket < 0)
-    {
-        perror("accept()");
-        return clientSocket;
-    }
-
-    socketThreads[clientSocket] = std::thread(&Server::processClient, this, clientSocket);
-
-    return 0;
-}
-
-int Server::processClient(int socket)
-{
-    while (serverRunning)
-    {
-        network.receiveOperation(socket);
-    }
-
-    close(socket);
-
-    return 0;
+    return grpc::Status::OK;
 }
 
 int main(int argc, char const *argv[])
 {
-    Server server (1111);
-    
-    while (true)
-    {
-        int err = server.acceptClient();
-        if (err < 0)
-        {
-            std::cerr << "Failed client connection" << std::endl;
-        }
-    }
+    Server service;
+
+    std::string server_address = "0.0.0.0:1111";
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+
+    std::cout << "Server listening on " << server_address << std::endl;
+    server->Wait();
 
     return 0;
 }

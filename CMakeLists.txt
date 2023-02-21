@@ -3,7 +3,7 @@ project(WireProtocols)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(include/)
+include_directories(include/ ${CMAKE_CURRENT_BINARY_DIR})
 
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
@@ -15,7 +15,6 @@ target_link_libraries(proto PUBLIC
         gRPC::grpc
         gRPC::grpc++
 )
-target_include_directories(proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 # Generate grpc skeleton and stub code.
 get_target_property(grpc_cpp_plugin_location gRPC::grpc_cpp_plugin LOCATION)

@@ -8,45 +8,26 @@
 #include <unordered_set>
 #include <vector>
 
-#include "network.hpp"
+#include <grpc/grpc.h>
+#include <grpcpp/server.h>
 
-#define PORT 8080
+#include "proto/chat.grpc.pb.h"
 
-class Server
+class Server : public ChatService::Service
 {
 public:
-    Server(int port);
 
-    ///////////////////// Server functions /////////////////////
+    grpc::Status CreateAccount(grpc::ServerContext* context, const Username* request, Response* response);
 
-    int acceptClient();
-
-    void stopServer();
-
-    //////////////////// Business functions ////////////////////
-
-    Network::Message createAccount(Network::Message info);
-
-    Network::Message listAccounts(Network::Message requester);
-
-    // Network::Message deleteAccount(Network::Message requester);
-
-    // Network::Message sendMessage(Network::Message message);
+    grpc::Status DeleteAccount(grpc::ServerContext* context, const Username* request, Response* response);
+    
+    grpc::Status ListAccoutns(grpc::ServerContext* context, const Empty* request, ListResponse* response);
+    
+    grpc::Status SendMessage(grpc::ServerContext* context, const Message* request, Response* response);
+    
+    grpc::Status MessageStream(grpc::ServerContext* context, const Empty* request, grpc::ServerWriter< ::Message>* writer);
     
 private:
-    int serverFd;
-
-    std::atomic<bool> serverRunning;
 
     std::unordered_set<std::string> userList;
-
-    std::unordered_map<std::string, int> activeSockets;
-
-    std::unordered_map<int, std::mutex> socketLocks;
-
-    std::unordered_map<int, std::thread> socketThreads;
-
-    Network network;
-
-    int processClient(int socket);
 };

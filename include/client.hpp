@@ -1,24 +1,15 @@
 #pragma once
 
-#include "network.hpp"
+#include <grpc/grpc.h>
+#include <grpcpp/channel.h>
+
+#include "proto/chat.grpc.pb.h"
 
 class Client
 {
 public:
-
-    Client(std::string host, int port);
-
-    Network::Message messageCallback(Network::Message message);
-
-    void createAccount(std::string username);
-
-    void getAccountList();
-
-    Network network;
-    int clientFd;
-
+    Client(std::shared_ptr<grpc::Channel> channel);
 
 private:
-
-
+    std::unique_ptr<ChatService::Stub> stub;
 };
