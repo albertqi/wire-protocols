@@ -5,6 +5,26 @@ set(CMAKE_CXX_STANDARD 17)
 
 include_directories(include/)
 
+find_package(protobuf CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
+
+add_library(proto proto/chat.proto)
+
+target_link_libraries(proto PUBLIC
+        protobuf::libprotobuf
+        gRPC::grpc
+        gRPC::grpc++
+)
+target_include_directories(proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
+# Generate grpc skeleton and stub code.
+get_target_property(grpc_cpp_plugin_location gRPC::grpc_cpp_plugin LOCATION)
+
+protobuf_generate(TARGET proto LANGUAGE cpp)
+protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}")
+
 add_executable(server src/server.cpp src/network.cpp src/callback.cpp)
+target_link_libraries(server proto)
 
 add_executable(client src/client.cpp src/network.cpp src/callback.cpp)
+target_link_libraries(client proto)

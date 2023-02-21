@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+/**
+ * A username object to sent over the network. Defined for possible complexity
+ * increases in the future.
+ */
+message Username {
+    string name = 1;
+}
+
+/**
+ * Represents a message sent between users.
+ */
+message Message {
+    Username sender = 1;
+    Username receiver = 2;
+    string message = 3;
+}
+
+/**
+ * An arbitrary response from the server as a result of some operation by the
+ * client. A code of zero indicates success, anything else is an error.
+ */
+message Response {
+    int32 code = 1;
+    string response = 2;
+}
+
+/**
+ * Response to the list accounts operation. An unknown number of accounts are
+ * returned.
+ */
+message ListResponse {
+    repeated Username accounts = 1;
+}
+
+/*
+ * "Don't care" object. Acts as void return or argument.
+ */
+message Empty {}
+
+service ChatService {
+    rpc CreateAccount(Username) returns (Response);
+    rpc DeleteAccount(Username) returns (Response);
+    rpc ListAccoutns(Empty) returns (ListResponse);
+    rpc SendMessage(Message) returns (Response);
+    rpc MessageStream(Empty) returns (stream Message);
+}
