@@ -43,6 +43,21 @@ Client::Client(std::string host, int port)
     network.registerCallback(Network::LIST, Callback(this, &Client::handleList));
     network.registerCallback(Network::SEND, Callback(this, &Client::handleReceive));
     network.registerCallback(Network::ERROR, Callback(this, &Client::messageCallback));
+
+    clientRunning = true;
+
+    opThread = std::thread([this]()
+    {
+        while (clientRunning)
+        {
+            network.receiveOperation(clientFd);
+        }
+    });
+}
+
+Client::~Client()
+{
+    opThread.join();
 }
 
 Network::Message Client::messageCallback(Network::Message message)
@@ -60,7 +75,6 @@ Network::Message Client::handleCreateResponse(Network::Message message)
     currentUser = message.data;
     opResult = "Created account " + message.data;
     cv.notify_all();
-    cv_messages.notify_all();
     return {Network::NO_RETURN};
 }
 
@@ -136,6 +150,7 @@ std::string Client::requestMessages()
 
 void Client::stopClient()
 {
+    clientRunning = false;
     close(clientFd);
 }
 
@@ -143,20 +158,9 @@ int main(int argc, char const *argv[])
 {
     Client client("127.0.0.1", 1111);
 
-    std::atomic<bool> clientRunning = true;
-    std::string buffer;
-
-    std::thread op_thread([&clientRunning, &client]()
+    std::thread msg_thread([&client]()
     {
-        while (clientRunning)
-        {
-            client.network.receiveOperation(client.clientFd);
-        }
-    });
-
-    std::thread msg_thread([&clientRunning, &client]()
-    {
-        while (clientRunning)
+        while (client.clientRunning)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
             std::string messages = client.requestMessages();
@@ -168,7 +172,8 @@ int main(int argc, char const *argv[])
         }
     });
 
-    while (clientRunning)
+    std::string buffer;
+    while (client.clientRunning)
     {
         std::cout << "> ";
         std::getline(std::cin, buffer);
@@ -178,7 +183,6 @@ int main(int argc, char const *argv[])
 
         if (arg1 == "exit")
         {
-            clientRunning = false;
             client.stopClient();
         }
         else if (arg1 == "login")
@@ -189,14 +193,13 @@ int main(int argc, char const *argv[])
                 continue;
             }
             client.getAccountList("");
-            if (client.clientUserList.find(arg2) == client.clientUserList.end())
+            if (client.getClientUserList().find(arg2) == client.getClientUserList().end())
             {
                 std::cout << "User does not exist" << std::endl;
                 continue;
             }
-            client.currentUser = arg2;
-            client.cv_messages.notify_all();
-            std::cout << "Logged in as " << client.currentUser << std::endl;
+            client.setCurrentUser(arg2);
+            std::cout << "Logged in as " << client.getCurrentUser() << std::endl;
         }
         else if (arg1 == "create")
         {
@@ -209,19 +212,19 @@ int main(int argc, char const *argv[])
         }
         else if (arg1 == "delete")
         {
-            if (client.currentUser.size() <= 0)
+            if (client.getCurrentUser().size() <= 0)
             {
                 std::cout << "Not logged in" << std::endl;
                 continue;
             }
-            std::cout << client.deleteAccount(client.currentUser) << std::endl;
+            std::cout << client.deleteAccount(client.getCurrentUser()) << std::endl;
         }
         else if (arg1 == "list")
         {
             client.getAccountList(arg2);
 
             std::string list;
-            for (std::string user : client.clientUserList)
+            for (std::string user : client.getClientUserList())
             {
                 list += user + "\n";
             }
@@ -229,7 +232,7 @@ int main(int argc, char const *argv[])
         }
         else if (arg1 == "send")
         {
-            if (client.currentUser.size() <= 0)
+            if (client.getCurrentUser().size() <= 0)
             {
                 std::cout << "Not logged in" << std::endl;
                 continue;
@@ -240,7 +243,7 @@ int main(int argc, char const *argv[])
                 continue;
             }
             client.getAccountList("");
-            if (client.clientUserList.find(arg2) == client.clientUserList.end())
+            if (client.getClientUserList().find(arg2) == client.getClientUserList().end())
             {
                 std::cout << "Recipient does not exist" << std::endl;
                 continue;
@@ -248,7 +251,7 @@ int main(int argc, char const *argv[])
             std::string message;
             std::cout << "Enter message: ";
             std::getline(std::cin, message);
-            client.sendMessage({Network::SEND, message, client.currentUser, arg2});
+            client.sendMessage({Network::SEND, message, client.getCurrentUser(), arg2});
         }
         else if (buffer.size() > 0)
         {
@@ -256,7 +259,6 @@ int main(int argc, char const *argv[])
         }
     }
 
-    op_thread.join();
     msg_thread.join();
     return 0;
 }

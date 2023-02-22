@@ -11,6 +11,8 @@ class Client
 public:
     Client(std::string host, int port);
 
+   ~Client();
+
     Network::Message messageCallback(Network::Message message);
 
     Network::Message handleCreateResponse(Network::Message message);
@@ -32,16 +34,32 @@ public:
     std::string requestMessages();
 
     void stopClient();
-    
+
+    inline std::string getCurrentUser()
+    {
+        return currentUser;
+    }
+
+    inline void setCurrentUser(std::string user)
+    {
+        currentUser = user;
+    }
+
+    inline std::unordered_set<std::string> getClientUserList()
+    {
+        return clientUserList;
+    };
+
+    std::atomic<bool> clientRunning;
+
+private:
     Network network;
     int clientFd;
     std::mutex m;
     std::condition_variable cv;
-    std::condition_variable cv_messages;
     std::string currentUser;
     std::unordered_set<std::string> clientUserList;
     std::string opResult;
     std::string opResultMessages;
-
-private:
+    std::thread opThread;
 };
