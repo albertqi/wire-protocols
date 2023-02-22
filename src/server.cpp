@@ -7,26 +7,72 @@
 
 grpc::Status Server::CreateAccount(grpc::ServerContext *context, const Username *request, Response *response)
 {
+    std::string newUser = info.data;
+    if (newUser.size() == 0)
+    {
+        return grpc::Status(-1, "No username provided");
+    }
+
+    if (userList.find(newUser) != userList.end())
+    {
+        return grpc::Status(-1, "User already exists");
+    }
+
+    std::cout << "Creating new account: " << newUser << "\n";
+    userList.insert(newUser);
+
     return grpc::Status::OK;
 }
 
 grpc::Status Server::DeleteAccount(grpc::ServerContext *context, const Username *request, Response *response)
 {
+    std::string user = requester.data;
+
+    if (userList.find(user) == userList.end())
+    {
+        return grpc::Status(-1, "User does not exist")
+    }
+
+    std::cout << "Deleting account: " << user << "\n";
+    userList.erase(user);
+
     return grpc::Status::OK;
 }
 
-grpc::Status Server::ListAccoutns(grpc::ServerContext *context, const Empty *request, ListResponse *response)
+grpc::Status Server::ListAccoutns(grpc::ServerContext *context, const ListQuery *request, ListResponse *response)
 {
+    std::string result;
+    std::cout << "Sending account list...\n";
+
+    for (auto &user : this->userList)
+    {
+        result += user + "\n";
+    }
+
     return grpc::Status::OK;
 }
 
 grpc::Status Server::SendMessage(grpc::ServerContext *context, const Message *request, Response *response)
 {
+    messages[message.receiver].push(message);
+
     return grpc::Status::OK;
 }
 
 grpc::Status Server::MessageStream(grpc::ServerContext *context, const Empty *request, grpc::ServerWriter<::Message> *writer)
 {
+    std::string username = message.data;
+
+    std::string result;
+    std::cout << "Sending messages for " << username << "...\n";
+
+    while (!messages[username].empty())
+    {
+        Network::Message msg = messages[username].front();
+        messages[username].pop();
+        result += msg.sender + ": " + msg.data + "\n";
+    }
+
     return grpc::Status::OK;
 }
 
