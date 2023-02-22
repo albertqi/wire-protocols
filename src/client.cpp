@@ -21,8 +21,13 @@ std::string Client::createAccount(std::string username)
     Response response;
 
     grpc::Status err = stub->CreateAccount(&context, username_obj, &response);
+    if (err.error_code() != grpc::StatusCode::OK)
+    {
+        return "Failed to create account: " + response.response();
+    }
 
-    return response.response();
+    currentUser = response.response();
+    return "Created account: " + response.response();
 }
 
 void Client::getAccountList(std::string sub)
@@ -54,9 +59,13 @@ std::string Client::deleteAccount(std::string username)
 
     Response response;
     
-    stub->DeleteAccount(&context, username_obj, &response);
+    grpc::Status err = stub->DeleteAccount(&context, username_obj, &response);
+    if (err.error_code() != grpc::StatusCode::OK)
+    {
+        return "Failed to delete account: " + response.response();
+    }
 
-    return response.response();
+    return "Deleted account: " + response.response();
 }
 
 void Client::sendMessage(std::string recipient, std::string message)
@@ -88,6 +97,11 @@ std::string Client::requestMessages()
 
     Message message;
     stream->Read(&message);
+
+    if (message.message().size() <= 0)
+    {
+        return "";
+    }
 
     return message.sender().name() + ": " + message.message();
 }
