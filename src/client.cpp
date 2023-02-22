@@ -16,46 +16,65 @@ Client::Client(std::shared_ptr<grpc::Channel> channel)
 
 void Client::createAccount(std::string username)
 {
+    grpc::ClientContext context;
+
     Username username_obj;
     username_obj.set_name(username);
 
-    stub.CreateAccount(username_obj);
+    Response response;
+
+    grpc::Status err = stub->CreateAccount(&context, username_obj, &response);
 }
 
 void Client::getAccountList(std::string sub)
 {
-    std::string message = stub.ListAccounts();
+    grpc::ClientContext context;
 
-    size_t pos = 0;
-    while ((pos = message.find("\n")) != std::string::npos)
+    ListQuery query;
+    query.set_query(sub);
+
+    ListResponse response;
+
+    grpc::Status err = stub->ListAccounts(&context, query, &response);
+
+    clientUserList.clear();
+    for (const Username& user: response.accounts())
     {
-        std::string user = message.substr(0, pos);
-        if (user.size() <= 0)
-        {
-            break;
-        }
-        clientUserList.insert(user);
-        message.data.erase(0, pos + 1);
+        clientUserList.insert(user.name());
     }
+
     cv.notify_all();
 }
 
 void Client::deleteAccount(std::string username)
 {
+    grpc::ClientContext context;
+
     Username username_obj;
     username_obj.set_name(username);
+
+    Response response;
     
-    stub.DeleteAccount(username_obj);
+    stub->DeleteAccount(&context, username_obj, &response);
 }
 
 void Client::sendMsg(std::string recipient, std::string message)
 {
+    grpc::ClientContext context;
+
     Message message_obj;
-    message_obj.set_sender(currentUser);
-    message_obj.set_receiver(recipient);
+    Username* sender = new Username;
+    sender->set_name(currentUser);
+    Username* receiver = new Username;
+    receiver->set_name(recipient);
+
+    message_obj.set_allocated_sender (sender);
+    message_obj.set_allocated_receiver(receiver);
     message_obj.set_message(message);
 
-    stub.sendMessage(message_obj);
+    Response response;
+
+    grpc::Status err = stub->SendMessage(&context, message_obj, &response);
 }
 
 int main(int argc, char const *argv[])
@@ -65,12 +84,6 @@ int main(int argc, char const *argv[])
 
     std::atomic<bool> clientRunning = true;
     std::string buffer;
-
-    std::thread op_thread([&clientRunning, &client]() {
-        while (clientRunning) {
-            client.network.receiveOperation(client.clientFd);
-        }
-    });
 
     std::thread msg_thread([&clientRunning, &client]() {
         while (clientRunning) {
