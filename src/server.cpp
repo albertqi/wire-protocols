@@ -150,7 +150,8 @@ int Server::acceptClient()
         return clientSocket;
     }
 
-    socketThreads[clientSocket] = std::thread(&Server::processClient, this, clientSocket);
+    std::thread socketThread(&Server::processClient, this, clientSocket);
+    socketThread.detach();
 
     return 0;
 }
