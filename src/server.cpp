@@ -115,7 +115,7 @@ Network::Message Server::sendMessage(Network::Message message)
 {
     messages[message.receiver].push(message);
 
-    return {Network::SEND};
+    return {Network::OK};
 }
 
 Network::Message Server::requestMessages(Network::Message message)

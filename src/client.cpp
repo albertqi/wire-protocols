@@ -51,6 +51,7 @@ Network::Message Client::messageCallback(Network::Message message)
     {
         std::cout << message.data << std::endl;
     }
+    cv.notify_all();
     return {Network::NO_RETURN};
 }
 
@@ -58,6 +59,7 @@ Network::Message Client::handleCreateResponse(Network::Message message)
 {
     std::cout << "Created account " << message.data << std::endl;
     currentUser = message.data;
+    cv.notify_all();
     return {Network::NO_RETURN};
 }
 
@@ -65,6 +67,7 @@ Network::Message Client::handleDelete(Network::Message message)
 {
     std::cout << "Deleted account " << message.data << std::endl;
     currentUser = "";
+    cv.notify_all();
     return {Network::NO_RETURN};
 }
 
@@ -94,27 +97,36 @@ Network::Message Client::handleReceive(Network::Message message)
     }
     std::cout << "\nYou have received mail :)" << std::endl;
     std::cout << message.data;
+    cv.notify_all();
     return {Network::NO_RETURN};
 }
 
 void Client::createAccount(std::string username)
 {
+    std::unique_lock lock(m);
     network.sendMessage(clientFd, {Network::CREATE, username});
+    cv.wait(lock);
 }
 
 void Client::getAccountList(std::string sub)
 {
+    std::unique_lock lock(m);
     network.sendMessage(clientFd, {Network::LIST, sub});
+    cv.wait(lock);
 }
 
 void Client::deleteAccount(std::string username)
 {
+    std::unique_lock lock(m);
     network.sendMessage(clientFd, {Network::DELETE, username});
+    cv.wait(lock);
 }
 
 void Client::sendMsg(Network::Message message)
 {
+    std::unique_lock lock(m);
     network.sendMessage(clientFd, message);
+    cv.wait(lock);
 }
 
 void Client::stopClient()
@@ -162,9 +174,7 @@ int main(int argc, char const *argv[])
                 std::cout << "Please supply non-empty username" << std::endl;
                 continue;
             }
-            std::unique_lock lock(client.m);
             client.getAccountList("");
-            client.cv.wait(lock);
             if (client.clientUserList.find(arg2) == client.clientUserList.end())
             {
                 std::cout << "User does not exist" << std::endl;
@@ -193,9 +203,7 @@ int main(int argc, char const *argv[])
         }
         else if (arg1 == "list")
         {
-            std::unique_lock lock(client.m);
             client.getAccountList(arg2);
-            client.cv.wait(lock);
 
             std::string list;
             for (std::string user : client.clientUserList)
@@ -216,9 +224,7 @@ int main(int argc, char const *argv[])
                 std::cout << "Please supply non-empty username" << std::endl;
                 continue;
             }
-            std::unique_lock lock(client.m);
             client.getAccountList("");
-            client.cv.wait(lock);
             if (client.clientUserList.find(arg2) == client.clientUserList.end())
             {
                 std::cout << "Recipient does not exist" << std::endl;
@@ -229,7 +235,7 @@ int main(int argc, char const *argv[])
             std::getline(std::cin, message);
             client.sendMsg({Network::SEND, message, client.currentUser, arg2});
         }
-        else if (arg1.size() > 0)
+        else if (buffer.size() > 0)
         {
             std::cout << "Invalid command" << std::endl;
         }
