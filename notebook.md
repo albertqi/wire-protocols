@@ -26,3 +26,7 @@ Here, we decided to add callbacks to handle operations in a more isolated manner
 How can the client receive messages from the server and send messages at the same time? We chose to spawn a new thread that just continually checks for new messages.
 
 We ran into an issue with synchronization, where if the user typed multiple commands fast enough, then the later commands might have run before the previous ones were finished. We chose to fix this issue by adding operation locks (i.e., locking before every operation and releasing the lock at the end).
+
+The transition to gRPC was fairly easy since we just needed to replace parts of our code with gRPC code. This means that the complexity of the code was similar between the two versions.
+
+The buffer size with the wire protocol is the standard socket buffer size, and the buffer size for gRPC is 4 MB.
