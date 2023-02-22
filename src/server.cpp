@@ -108,7 +108,7 @@ Network::Message Server::deleteAccount(Network::Message requester)
     std::cout << "Deleting account: " << user << "\n";
     userList.erase(user);
 
-    return {Network::OK};
+    return {Network::DELETE, user};
 }
 
 Network::Message Server::sendMessage(Network::Message message)
@@ -129,7 +129,7 @@ Network::Message Server::requestMessages(Network::Message message)
     {
         Network::Message msg = messages[username].front();
         messages[username].pop();
-        result += msg.sender + ": " + msg.data + "\n";
+        result += "> " + msg.sender + ": " + msg.data + "\n";
     }
 
     return {Network::SEND, result};

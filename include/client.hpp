@@ -15,6 +15,8 @@ public:
 
     Network::Message handleCreateResponse(Network::Message message);
 
+    Network::Message handleDelete(Network::Message message);
+
     Network::Message handleList(Network::Message message);
 
     Network::Message handleReceive(Network::Message message);
