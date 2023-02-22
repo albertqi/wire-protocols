@@ -85,15 +85,18 @@ private:
     */
     std::atomic<bool> serverRunning;
 
+
     /**
      * Stores the list of user accounts.
     */
     std::unordered_set<std::string> userList;
+    std::mutex userListLock;
 
     /**
      * Stores the undelivered messages for each user.
     */
     std::unordered_map<std::string, std::queue<Network::Message>> messages;
+    std::unordered_map<std::string, std::mutex> messages_lock;
 
     /**
      * The network instance acting as the data-link layer.

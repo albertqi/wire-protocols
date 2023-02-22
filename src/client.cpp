@@ -119,11 +119,12 @@ std::string Client::createAccount(std::string username)
     return opResult;
 }
 
-void Client::getAccountList(std::string sub)
+std::string Client::getAccountList(std::string sub)
 {
     std::unique_lock lock(m);
     network.sendMessage(clientFd, {Network::LIST, sub});
     cv.wait(lock);
+    return opResult;
 }
 
 std::string Client::deleteAccount(std::string username)

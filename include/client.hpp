@@ -28,7 +28,7 @@ public:
     /**
      * Updates the internal account list from the server.
     */
-    void getAccountList(std::string sub);
+    std::string getAccountList(std::string sub);
 
     /**
      * Deletes the specified account on the server.
@@ -70,6 +70,33 @@ public:
 
     std::atomic<bool> clientRunning;
 
+    ////////// FOR TESTING PURPOSES ONLY. DO NOT USE IN PRODUCTION //////////
+
+    /**
+     * `OK` and `ERROR` handler.
+    */
+    Network::Message messageCallback(Network::Message message);
+
+    /**
+     * `CREATE` handler.
+    */
+    Network::Message handleCreateResponse(Network::Message message);
+
+    /**
+     * `DELETE` handler.
+    */
+    Network::Message handleDelete(Network::Message message);
+
+    /**
+     * `LIST` handler.
+    */
+    Network::Message handleList(Network::Message message);
+
+    /**
+     * `REQUEST` handler.
+    */
+    Network::Message handleReceive(Network::Message message);
+
 private:
 
     /**
@@ -109,29 +136,4 @@ private:
      * Network `receiveOperation()` thread.
     */
     std::thread opThread;
-
-    /**
-     * `OK` and `ERROR` handler.
-    */
-    Network::Message messageCallback(Network::Message message);
-
-    /**
-     * `CREATE` handler.
-    */
-    Network::Message handleCreateResponse(Network::Message message);
-
-    /**
-     * `DELETE` handler.
-    */
-    Network::Message handleDelete(Network::Message message);
-
-    /**
-     * `LIST` handler.
-    */
-    Network::Message handleList(Network::Message message);
-
-    /**
-     * `REQUEST` handler.
-    */
-    Network::Message handleReceive(Network::Message message);
 };

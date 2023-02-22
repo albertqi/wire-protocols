@@ -66,6 +66,7 @@ void Server::stopServer()
 
 Network::Message Server::createAccount(Network::Message info)
 {
+    std::unique_lock lock(userListLock);
     std::string newUser = info.data;
     if (newUser.size() == 0)
     {
@@ -84,6 +85,7 @@ Network::Message Server::createAccount(Network::Message info)
 
 Network::Message Server::listAccounts(Network::Message requester)
 {
+    std::unique_lock lock(userListLock);
     std::string result;
     std::string sub = requester.data;
 
@@ -100,6 +102,7 @@ Network::Message Server::listAccounts(Network::Message requester)
 
 Network::Message Server::deleteAccount(Network::Message requester)
 {
+    std::unique_lock lock(userListLock);
     std::string user = requester.data;
 
     if (userList.find(user) == userList.end())
@@ -108,12 +111,14 @@ Network::Message Server::deleteAccount(Network::Message requester)
     }
 
     userList.erase(user);
+    messages_lock.erase(user);
 
     return {Network::DELETE, user};
 }
 
 Network::Message Server::sendMessage(Network::Message message)
 {
+    std::unique_lock lock(messages_lock[message.receiver]);
     messages[message.receiver].push(message);
 
     return {Network::OK};
@@ -121,6 +126,7 @@ Network::Message Server::sendMessage(Network::Message message)
 
 Network::Message Server::requestMessages(Network::Message message)
 {
+    std::unique_lock lock(messages_lock[message.receiver]);
     std::string username = message.data;
     std::string result;
 
