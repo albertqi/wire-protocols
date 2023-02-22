@@ -129,7 +129,7 @@ Network::Message Server::requestMessages(Network::Message message)
     {
         Network::Message msg = messages[username].front();
         messages[username].pop();
-        result += "> " + msg.sender + ": " + msg.data + "\n";
+        result += msg.sender + ": " + msg.data + "\n";
     }
 
     return {Network::SEND, result};
