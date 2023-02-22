@@ -21,22 +21,27 @@ public:
 
     Network::Message handleReceive(Network::Message message);
 
-    void createAccount(std::string username);
+    std::string createAccount(std::string username);
 
-    void getAccountList(std::string sub);
+    std::string getAccountList(std::string sub);
 
-    void deleteAccount(std::string username);
+    std::string deleteAccount(std::string username);
 
-    void sendMsg(Network::Message message);
+    std::string sendMessage(Network::Message message);
+
+    std::string requestMessages();
 
     void stopClient();
-
+    
     Network network;
     int clientFd;
     std::mutex m;
     std::condition_variable cv;
+    std::condition_variable cv_messages;
     std::string currentUser;
     std::unordered_set<std::string> clientUserList;
+    std::string opResult;
+    std::string opResultMessages;
 
 private:
 };

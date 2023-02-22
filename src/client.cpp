@@ -49,7 +49,7 @@ Network::Message Client::messageCallback(Network::Message message)
 {
     if (message.data.size() > 0)
     {
-        std::cout << message.data << std::endl;
+        opResult = message.data;
     }
     cv.notify_all();
     return {Network::NO_RETURN};
@@ -57,16 +57,17 @@ Network::Message Client::messageCallback(Network::Message message)
 
 Network::Message Client::handleCreateResponse(Network::Message message)
 {
-    std::cout << "Created account " << message.data << std::endl;
     currentUser = message.data;
+    opResult = "Created account " + message.data;
     cv.notify_all();
+    cv_messages.notify_all();
     return {Network::NO_RETURN};
 }
 
 Network::Message Client::handleDelete(Network::Message message)
 {
-    std::cout << "Deleted account " << message.data << std::endl;
     currentUser = "";
+    opResult = "Deleted account " + message.data;
     cv.notify_all();
     return {Network::NO_RETURN};
 }
@@ -91,42 +92,46 @@ Network::Message Client::handleList(Network::Message message)
 
 Network::Message Client::handleReceive(Network::Message message)
 {
-    if (message.data.size() <= 0)
-    {
-        return {Network::NO_RETURN};
-    }
-    std::cout << "\nYou have received mail :)" << std::endl;
-    std::cout << message.data;
-    cv.notify_all();
+    opResultMessages = message.data;
     return {Network::NO_RETURN};
 }
 
-void Client::createAccount(std::string username)
+std::string Client::createAccount(std::string username)
 {
     std::unique_lock lock(m);
     network.sendMessage(clientFd, {Network::CREATE, username});
     cv.wait(lock);
+    return opResult;
 }
 
-void Client::getAccountList(std::string sub)
+std::string Client::getAccountList(std::string sub)
 {
     std::unique_lock lock(m);
     network.sendMessage(clientFd, {Network::LIST, sub});
     cv.wait(lock);
+    return opResult;
 }
 
-void Client::deleteAccount(std::string username)
+std::string Client::deleteAccount(std::string username)
 {
     std::unique_lock lock(m);
     network.sendMessage(clientFd, {Network::DELETE, username});
     cv.wait(lock);
+    return opResult;
 }
 
-void Client::sendMsg(Network::Message message)
+std::string Client::sendMessage(Network::Message message)
 {
     std::unique_lock lock(m);
     network.sendMessage(clientFd, message);
     cv.wait(lock);
+    return opResult;
+}
+
+std::string Client::requestMessages()
+{
+    network.sendMessage(clientFd, {Network::REQUEST, currentUser});
+    return opResultMessages;
 }
 
 void Client::stopClient()
@@ -141,16 +146,25 @@ int main(int argc, char const *argv[])
     std::atomic<bool> clientRunning = true;
     std::string buffer;
 
-    std::thread op_thread([&clientRunning, &client]() {
-        while (clientRunning) {
+    std::thread op_thread([&clientRunning, &client]()
+    {
+        while (clientRunning)
+        {
             client.network.receiveOperation(client.clientFd);
         }
     });
 
-    std::thread msg_thread([&clientRunning, &client]() {
-        while (clientRunning) {
-            client.network.sendMessage(client.clientFd, {Network::REQUEST, client.currentUser});
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::thread msg_thread([&clientRunning, &client]()
+    {
+        while (clientRunning)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            std::string messages = client.requestMessages();
+            if (messages.size() <= 0)
+            {
+                continue;
+            }
+            std::cout << "\nYou have received mail :)\n" << messages;
         }
     });
 
@@ -181,6 +195,7 @@ int main(int argc, char const *argv[])
                 continue;
             }
             client.currentUser = arg2;
+            client.cv_messages.notify_all();
             std::cout << "Logged in as " << client.currentUser << std::endl;
         }
         else if (arg1 == "create")
@@ -190,7 +205,7 @@ int main(int argc, char const *argv[])
                 std::cout << "Please supply non-empty username" << std::endl;
                 continue;
             }
-            client.createAccount(arg2);
+            std::cout << client.createAccount(arg2) << std::endl;
         }
         else if (arg1 == "delete")
         {
@@ -199,7 +214,7 @@ int main(int argc, char const *argv[])
                 std::cout << "Not logged in" << std::endl;
                 continue;
             }
-            client.deleteAccount(client.currentUser);
+            std::cout << client.deleteAccount(client.currentUser) << std::endl;
         }
         else if (arg1 == "list")
         {
@@ -233,7 +248,7 @@ int main(int argc, char const *argv[])
             std::string message;
             std::cout << "Enter message: ";
             std::getline(std::cin, message);
-            client.sendMsg({Network::SEND, message, client.currentUser, arg2});
+            client.sendMessage({Network::SEND, message, client.currentUser, arg2});
         }
         else if (buffer.size() > 0)
         {
