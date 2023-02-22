@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <string>
 #include <unordered_set>
+#include <thread>
 
 class Client
 {

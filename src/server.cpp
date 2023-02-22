@@ -166,19 +166,3 @@ int Server::processClient(int socket)
 
     return 0;
 }
-
-int main(int argc, char const *argv[])
-{
-    Server server(1111);
-
-    while (true)
-    {
-        int err = server.acceptClient();
-        if (err < 0)
-        {
-            std::cerr << "Failed client connection" << std::endl;
-        }
-    }
-
-    return 0;
-}
