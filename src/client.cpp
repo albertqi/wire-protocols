@@ -64,10 +64,7 @@ Client::~Client()
 
 Network::Message Client::messageCallback(Network::Message message)
 {
-    if (message.data.size() > 0)
-    {
-        opResult = message.data;
-    }
+    opResult = message.data;
     cv.notify_all();
     return {Network::NO_RETURN};
 }
@@ -90,6 +87,7 @@ Network::Message Client::handleDelete(Network::Message message)
 
 Network::Message Client::handleList(Network::Message message)
 {
+    opResult = message.data;
     clientUserList.clear();
     size_t pos = 0;
     // Split the newline seperated names into an actual list.
