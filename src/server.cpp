@@ -18,6 +18,8 @@ grpc::Status Server::CreateAccount(grpc::ServerContext *context, const Username 
     std::cout << "Creating new account: " << newUser << "\n";
     userList.insert(newUser);
 
+    response->set_response(newUser);
+
     return grpc::Status::OK;
 }
 
@@ -33,12 +35,13 @@ grpc::Status Server::DeleteAccount(grpc::ServerContext *context, const Username 
     std::cout << "Deleting account: " << user << "\n";
     userList.erase(user);
 
+    response->set_response(user);
+
     return grpc::Status::OK;
 }
 
 grpc::Status Server::ListAccounts(grpc::ServerContext *context, const ListQuery *request, ListResponse *response)
 {
-    std::string result;
     std::string sub = request->query();
     std::cout << "Sending account list...\n";
 
@@ -46,7 +49,8 @@ grpc::Status Server::ListAccounts(grpc::ServerContext *context, const ListQuery 
     {
         if (user.find(sub) != std::string::npos)
         {
-            result += user + "\n";
+            Username* username = response->add_accounts();
+            username->set_name(user);
         }
     }
 
@@ -56,6 +60,7 @@ grpc::Status Server::ListAccounts(grpc::ServerContext *context, const ListQuery 
 grpc::Status Server::SendMessage(grpc::ServerContext *context, const Message *request, Response *response)
 {
     Message* request_copy = new Message(*request);
+    std::cout << "Sending message from " << request->sender().name() << " to " << request->receiver().name() << "\n";
     messages[request->receiver().name()].push(request_copy);
 
     return grpc::Status::OK;
@@ -66,7 +71,8 @@ grpc::Status Server::MessageStream(grpc::ServerContext *context, const Username 
     std::string username = request->name();
 
     std::string result;
-    std::cout << "Sending messages for " << username << "...\n";
+    if (!messages[username].empty())
+        std::cout << "Sending messages for " << username << "...\n";
 
     while (!messages[username].empty())
     {
