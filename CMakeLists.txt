@@ -23,10 +23,9 @@ get_target_property(grpc_cpp_plugin_location gRPC::grpc_cpp_plugin LOCATION)
 protobuf_generate(TARGET proto LANGUAGE cpp)
 protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}")
 
-add_executable(server src/server.cpp src/network.cpp src/callback.cpp)
-target_link_libraries(server proto)
+add_executable(server src/server.cpp src/network.cpp src/callback.cpp src/serverMain.cpp)
 
-add_executable(client src/client.cpp src/network.cpp src/callback.cpp)
-target_link_libraries(client proto)
+add_executable(client src/client.cpp src/network.cpp src/callback.cpp src/clientMain.cpp)
 
-add_executable(test test/test.cpp)
+add_executable(test test/test.cpp src/client.cpp src/server.cpp src/network.cpp
+                    src/callback.cpp)

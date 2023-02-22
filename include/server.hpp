@@ -1,12 +1,9 @@
 #pragma once
 
-#include <atomic>
 #include <mutex>
-#include <thread>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
 #include <queue>
 
 #include <grpc/grpc.h>
@@ -31,12 +28,6 @@ public:
 private:
 
     std::unordered_set<std::string> userList;
-
-    std::unordered_map<int, std::string> activeSockets;
-
-    std::unordered_map<int, std::mutex> socketLocks;
-
-    std::unordered_map<int, std::thread> socketThreads;
 
     std::unordered_map<std::string, std::queue<Message*>> messages;
 

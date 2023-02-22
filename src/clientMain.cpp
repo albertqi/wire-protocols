@@ -1,11 +1,21 @@
+#include <chrono>
+#include <iostream>
+#include <string>
+#include <thread>
+
+#include "client.hpp"
+
+#include <grpcpp/client_context.h>
+#include <grpcpp/create_channel.h>
+
 int main(int argc, char const *argv[])
 {
     Client client(grpc::CreateChannel("localhost:1111",
                           grpc::InsecureChannelCredentials()));
 
-    std::thread msg_thread ([&client]()
+    std::thread msg_thread([&client]()
     {
-        while(client.clientRunning)
+        while (client.clientRunning)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
             std::string messages = client.requestMessages();
