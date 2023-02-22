@@ -15,21 +15,44 @@ class Client
 public:
     Client(std::shared_ptr<grpc::Channel> channel);
 
-    Client(std::string host, int port);
-
-    void createAccount(std::string username);
+    std::string createAccount(std::string username);
 
     void getAccountList(std::string sub);
 
-    void deleteAccount(std::string username);
+    std::string deleteAccount(std::string username);
 
-    void sendMsg(std::string recipient, std::string message);
+    void sendMessage(std::string recipient, std::string message);
 
-private:
+    std::string requestMessages();
+
+    void stopClient();
+
+    inline std::string getCurrentUser()
+    {
+        return currentUser;
+    }
+
+    inline void setCurrentUser(std::string user)
+    {
+        currentUser = user;
+    }
+
+    inline std::unordered_set<std::string> getClientUserList()
+    {
+        return clientUserList;
+    };
+
+    std::atomic<bool> clientRunning;
+
     std::unique_ptr<ChatService::Stub> stub;
 
+private:
+    
     std::mutex m;
     std::condition_variable cv;
     std::string currentUser;
     std::unordered_set<std::string> clientUserList;
+    std::string opResult;
+    std::string opResultMessages;
+    std::thread opThread;
 };

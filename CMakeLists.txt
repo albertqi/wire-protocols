@@ -28,3 +28,5 @@ target_link_libraries(server proto)
 
 add_executable(client src/client.cpp src/network.cpp src/callback.cpp)
 target_link_libraries(client proto)
+
+add_executable(test test/test.cpp)
