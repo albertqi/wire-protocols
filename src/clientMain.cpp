@@ -23,7 +23,7 @@ int main(int argc, char const *argv[])
             {
                 continue;
             }
-            std::cout << "\nYou have received mail :)\n" << messages;
+            std::cout << "\nYou have received mail :)\n" << messages << std::endl;
         }
     });
 
@@ -106,7 +106,7 @@ int main(int argc, char const *argv[])
             std::string message;
             std::cout << "Enter message: ";
             std::getline(std::cin, message);
-            client.sendMessage(message, arg2);
+            client.sendMessage(arg2, message);
         }
         else if (buffer.size() > 0)
         {
