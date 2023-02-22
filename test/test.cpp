@@ -4,11 +4,15 @@
 #include <string>
 #include <thread>
 
+#define PADDED_LENGTH 50
+
 bool allTestsPassed = true;
 
 void test(bool b, std::string msg)
 {
-    msg += b ? " PASSED" : " FAILED";
+    int i = msg.size();
+    msg += b ? "PASSED" : "FAILED";
+    msg.insert(i, PADDED_LENGTH - msg.size(), ' ');
     allTestsPassed = allTestsPassed && b;
     std::cerr << msg << std::endl;
 }

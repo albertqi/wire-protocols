@@ -12,4 +12,5 @@ cd build
 cmake ../
 make server # To compile the server
 make client # To compile the client
+make test   # To compile the unit tests
 ```

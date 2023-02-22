@@ -73,7 +73,6 @@ Network::Message Server::createAccount(Network::Message info)
         return {Network::ERROR, "User already exists"};
     }
 
-    std::cout << "Creating new account: " << newUser << "\n";
     userList.insert(newUser);
 
     return {Network::CREATE, newUser};
@@ -83,7 +82,6 @@ Network::Message Server::listAccounts(Network::Message requester)
 {
     std::string result;
     std::string sub = requester.data;
-    std::cout << "Sending account list...\n";
 
     for (auto &user : this->userList)
     {
@@ -105,7 +103,6 @@ Network::Message Server::deleteAccount(Network::Message requester)
         return {Network::ERROR, "User does not exist"};
     }
 
-    std::cout << "Deleting account: " << user << "\n";
     userList.erase(user);
 
     return {Network::DELETE, user};
@@ -121,9 +118,7 @@ Network::Message Server::sendMessage(Network::Message message)
 Network::Message Server::requestMessages(Network::Message message)
 {
     std::string username = message.data;
-
     std::string result;
-    std::cout << "Sending messages for " << username << "...\n";
 
     while (!messages[username].empty())
     {
