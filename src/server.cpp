@@ -15,7 +15,6 @@ grpc::Status Server::CreateAccount(grpc::ServerContext *context, const Username 
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "User already exists");
     }
 
-    std::cout << "Creating new account: " << newUser << "\n";
     userList.insert(newUser);
 
     response->set_response(newUser);

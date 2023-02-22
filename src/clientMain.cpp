@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -8,6 +9,10 @@
 #include <grpcpp/client_context.h>
 #include <grpcpp/create_channel.h>
 
+/**
+ * Terminal user-interface that lets the user communicate with the server and
+ * other clients.
+*/
 int main(int argc, char const *argv[])
 {
     Client client(grpc::CreateChannel("localhost:1111",
