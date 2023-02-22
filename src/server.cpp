@@ -82,11 +82,15 @@ Network::Message Server::createAccount(Network::Message info)
 Network::Message Server::listAccounts(Network::Message requester)
 {
     std::string result;
+    std::string sub = requester.data;
     std::cout << "Sending account list...\n";
 
     for (auto &user : this->userList)
     {
-        result += user + "\n";
+        if (user.find(sub) != std::string::npos)
+        {
+            result += user + "\n";
+        }
     }
 
     return {Network::LIST, result};

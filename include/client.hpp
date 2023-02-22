@@ -21,7 +21,7 @@ public:
 
     void createAccount(std::string username);
 
-    void getAccountList();
+    void getAccountList(std::string sub);
 
     void deleteAccount(std::string username);
 

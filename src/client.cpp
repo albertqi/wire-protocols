@@ -91,9 +91,9 @@ void Client::createAccount(std::string username)
     network.sendMessage(clientFd, {Network::CREATE, username});
 }
 
-void Client::getAccountList()
+void Client::getAccountList(std::string sub)
 {
-    network.sendMessage(clientFd, {Network::LIST});
+    network.sendMessage(clientFd, {Network::LIST, sub});
 }
 
 void Client::deleteAccount(std::string username)
@@ -118,46 +118,59 @@ int main(int argc, char const *argv[])
     std::atomic<bool> clientRunning = true;
     std::string buffer;
 
-    std::thread op_thread([&clientRunning, &client]()
-                          { while (clientRunning){
-                    client.network.receiveOperation(client.clientFd);
-                    } });
+    std::thread op_thread([&clientRunning, &client]() {
+        while (clientRunning) {
+            client.network.receiveOperation(client.clientFd);
+        }
+    });
 
-    std::thread msg_thread([&clientRunning, &client]()
-                           {
-                                       while (clientRunning){
-                               client.network.sendMessage(client.clientFd, {Network::REQUEST, client.currentUser});
-                               std::this_thread::sleep_for(std::chrono::seconds(2));
-                               } });
+    std::thread msg_thread([&clientRunning, &client]() {
+        while (clientRunning) {
+            client.network.sendMessage(client.clientFd, {Network::REQUEST, client.currentUser});
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+        }
+    });
 
     while (clientRunning)
     {
-        std::cin >> buffer;
-        if (buffer == "exit")
+        std::getline(std::cin, buffer);
+        size_t pos = buffer.find(" ");
+        std::string arg1 = (pos == std::string::npos) ? buffer : buffer.substr(0, pos);
+        std::string arg2 = (pos == std::string::npos) ? "" : buffer.substr(pos + 1);
+
+        if (arg1 == "exit")
         {
             clientRunning = false;
             client.stopClient();
         }
-        else if (buffer == "login")
+        else if (arg1 == "login")
         {
-            std::cin >> buffer;
+            if (arg2.size() <= 0)
+            {
+                std::cout << "Please supply non-empty username" << std::endl;
+                continue;
+            }
             std::unique_lock lock(client.m);
-            client.getAccountList();
+            client.getAccountList("");
             client.cv.wait(lock);
-            if (client.clientUserList.find(buffer) == client.clientUserList.end())
+            if (client.clientUserList.find(arg2) == client.clientUserList.end())
             {
                 std::cout << "User does not exist" << std::endl;
                 continue;
             }
-            client.currentUser = buffer;
+            client.currentUser = arg2;
             std::cout << "Logged in as " << client.currentUser << std::endl;
         }
-        else if (buffer == "create")
+        else if (arg1 == "create")
         {
-            std::cin >> buffer;
-            client.createAccount(buffer);
+            if (arg2.size() <= 0)
+            {
+                std::cout << "Please supply non-empty username" << std::endl;
+                continue;
+            }
+            client.createAccount(arg2);
         }
-        else if (buffer == "delete")
+        else if (arg1 == "delete")
         {
             if (client.currentUser.size() <= 0)
             {
@@ -166,10 +179,10 @@ int main(int argc, char const *argv[])
             }
             client.deleteAccount(client.currentUser);
         }
-        else if (buffer == "list")
+        else if (arg1 == "list")
         {
             std::unique_lock lock(client.m);
-            client.getAccountList();
+            client.getAccountList(arg2);
             client.cv.wait(lock);
 
             std::string list;
@@ -179,27 +192,31 @@ int main(int argc, char const *argv[])
             }
             std::cout << list;
         }
-        else if (buffer == "send")
+        else if (arg1 == "send")
         {
-            std::cin >> buffer;
             if (client.currentUser.size() <= 0)
             {
                 std::cout << "Not logged in" << std::endl;
                 continue;
             }
+            if (arg2.size() <= 0)
+            {
+                std::cout << "Please supply non-empty username" << std::endl;
+                continue;
+            }
             std::unique_lock lock(client.m);
-            client.getAccountList();
+            client.getAccountList("");
             client.cv.wait(lock);
-            if (client.clientUserList.find(buffer) == client.clientUserList.end())
+            if (client.clientUserList.find(arg2) == client.clientUserList.end())
             {
                 std::cout << "Recipient does not exist" << std::endl;
                 continue;
             }
             std::string message;
-            std::cout << "Send message: ";
+            std::cout << "Enter message: ";
             std::cin.ignore();
             std::getline(std::cin, message);
-            client.sendMsg({Network::SEND, message, client.currentUser, buffer});
+            client.sendMsg({Network::SEND, message, client.currentUser, arg2});
         }
     }
 
