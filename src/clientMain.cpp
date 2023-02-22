@@ -1,9 +1,18 @@
-#include "client.hpp"
+#include <atomic>
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <chrono>
 
+#include "client.hpp"
+
+#include <grpcpp/client_context.h>
+#include <grpcpp/create_channel.h>
+
+/**
+ * Terminal user-interface that lets the user communicate with the server and
+ * other clients.
+*/
 int main(int argc, char const *argv[])
 {
     Client client("127.0.0.1", 1111);
@@ -18,7 +27,7 @@ int main(int argc, char const *argv[])
             {
                 continue;
             }
-            std::cout << "\nYou have received mail :)\n" << messages;
+            std::cout << "\nYou have received mail :)\n" << messages << std::endl;
         }
     });
 

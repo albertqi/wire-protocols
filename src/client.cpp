@@ -13,6 +13,7 @@
 
 Client::Client(std::string host, int port)
 {
+    // Connect to the server.
     struct sockaddr_in serverAddress;
 
     serverAddress.sin_family = AF_INET;
@@ -46,6 +47,7 @@ Client::Client(std::string host, int port)
 
     clientRunning = true;
 
+    // Start the receive operation thread.
     opThread = std::thread([this]()
     {
         while (clientRunning)
@@ -90,6 +92,7 @@ Network::Message Client::handleList(Network::Message message)
 {
     clientUserList.clear();
     size_t pos = 0;
+    // Split the newline seperated names into an actual list.
     while ((pos = message.data.find("\n")) != std::string::npos)
     {
         std::string user = message.data.substr(0, pos);
@@ -118,12 +121,11 @@ std::string Client::createAccount(std::string username)
     return opResult;
 }
 
-std::string Client::getAccountList(std::string sub)
+void Client::getAccountList(std::string sub)
 {
     std::unique_lock lock(m);
     network.sendMessage(clientFd, {Network::LIST, sub});
     cv.wait(lock);
-    return opResult;
 }
 
 std::string Client::deleteAccount(std::string username)

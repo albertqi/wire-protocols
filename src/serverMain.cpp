@@ -1,6 +1,9 @@
 #include "server.hpp"
 #include <iostream>
 
+/**
+ * Starts the server and accepts clients.
+*/
 int main(int argc, char const *argv[])
 {
     Server server(1111);

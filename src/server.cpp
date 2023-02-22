@@ -11,13 +11,16 @@
 #include "server.hpp"
 
 Server::Server(int port)
-{
+{   
+    // Initialize socket
     serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (serverFd < 0)
     {
         perror("socket()");
         exit(1);
     }
+    // Enable SO_REUSEADDR so that we dont get bind() errors if the previous
+    // socket is stuck in TIME_WAIT or hasn't been released by the OS.
     int enable = 1;
     if (setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
     {
@@ -30,6 +33,7 @@ Server::Server(int port)
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
+    // Bind to port and mark as a listening socket.
     if (bind(serverFd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         perror("bind()");
