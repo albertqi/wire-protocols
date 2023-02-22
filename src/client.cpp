@@ -16,27 +16,33 @@ Client::Client(std::shared_ptr<grpc::Channel> channel)
 
 void Client::createAccount(std::string username)
 {
-    stub.createAccount(username);
+    Username username_obj;
+    username_obj.set_name(username);
+
+    stub.CreateAccount(username_obj);
 }
 
 void Client::getAccountList()
 {
-    network.sendMessage(clientFd, {Network::LIST});
+    stub.ListAccounts();
 }
 
 void Client::deleteAccount(std::string username)
 {
-    network.sendMessage(clientFd, {Network::DELETE, username});
+    Username username_obj;
+    username_obj.set_name(username);
+    
+    stub.DeleteAccount(username_obj);
 }
 
-void Client::sendMsg(Network::Message message)
+void Client::sendMsg(std::string recipient, std::string message)
 {
-    network.sendMessage(clientFd, message);
-}
+    Message message_obj;
+    message_obj.set_sender(currentUser);
+    message_obj.set_receiver(recipient);
+    message_obj.set_message(message);
 
-void Client::stopClient()
-{
-    close(clientFd);
+    stub.sendMessage(message_obj);
 }
 
 int main(int argc, char const *argv[])
@@ -65,7 +71,6 @@ int main(int argc, char const *argv[])
         if (buffer == "exit")
         {
             clientRunning = false;
-            client.stopClient();
         }
         else if (buffer == "login")
         {
