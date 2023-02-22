@@ -19,11 +19,18 @@ message Message {
 
 /**
  * An arbitrary response from the server as a result of some operation by the
- * client. A code of zero indicates success, anything else is an error.
+ * client. Also defined for possible complexity increases.
  */
 message Response {
-    int32 code = 1;
-    string response = 2;
+    string response = 1;
+}
+
+/**
+  * A query for searching the list of users. Defined for possible complexity
+  * increases in the future.
+  */
+message ListQuery {
+    string query = 1;
 }
 
 /**
@@ -34,15 +41,10 @@ message ListResponse {
     repeated Username accounts = 1;
 }
 
-/*
- * "Don't care" object. Acts as void return or argument.
- */
-message Empty {}
-
 service ChatService {
     rpc CreateAccount(Username) returns (Response);
     rpc DeleteAccount(Username) returns (Response);
-    rpc ListAccoutns(Empty) returns (ListResponse);
+    rpc ListAccoutns(ListQuery) returns (ListResponse);
     rpc SendMessage(Message) returns (Response);
     rpc MessageStream(Username) returns (stream Message);
 }
