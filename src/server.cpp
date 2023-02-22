@@ -42,11 +42,15 @@ grpc::Status Server::DeleteAccount(grpc::ServerContext *context, const Username 
 grpc::Status Server::ListAccoutns(grpc::ServerContext *context, const ListQuery *request, ListResponse *response)
 {
     std::string result;
+    std::string sub = requester.data;
     std::cout << "Sending account list...\n";
 
     for (auto &user : this->userList)
     {
-        result += user + "\n";
+        if (user.find(sub) != std::string::npos)
+        {
+            result += user + "\n";
+        }
     }
 
     return grpc::Status::OK;

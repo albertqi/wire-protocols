@@ -22,11 +22,11 @@ public:
 
     grpc::Status DeleteAccount(grpc::ServerContext* context, const Username* request, Response* response);
     
-    grpc::Status ListAccoutns(grpc::ServerContext* context, const Empty* request, ListResponse* response);
+    grpc::Status ListAccoutns(grpc::ServerContext* context, const ListQuery* request, ListResponse* response);
     
     grpc::Status SendMessage(grpc::ServerContext* context, const Message* request, Response* response);
     
-    grpc::Status MessageStream(grpc::ServerContext* context, const Empty* request, grpc::ServerWriter< ::Message>* writer);
+    grpc::Status MessageStream(grpc::ServerContext* context, const Username* request, grpc::ServerWriter< ::Message>* writer);
     
 private:
 
@@ -38,7 +38,7 @@ private:
 
     std::unordered_map<int, std::thread> socketThreads;
 
-    std::unordered_map<std::string, std::queue<Network::Message>> messages;
+    std::unordered_map<std::string, std::queue<Message> messages;
 
     std::unordered_set<std::string> activeUsers;
 };
