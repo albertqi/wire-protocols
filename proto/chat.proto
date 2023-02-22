@@ -44,7 +44,7 @@ message ListResponse {
 service ChatService {
     rpc CreateAccount(Username) returns (Response);
     rpc DeleteAccount(Username) returns (Response);
-    rpc ListAccoutns(ListQuery) returns (ListResponse);
+    rpc ListAccounts(ListQuery) returns (ListResponse);
     rpc SendMessage(Message) returns (Response);
     rpc MessageStream(Username) returns (stream Message);
 }

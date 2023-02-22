@@ -23,6 +23,8 @@ public:
 
     void deleteAccount(std::string username);
 
+    void sendMsg(std::string recipient, std::string message);
+
 private:
     std::unique_ptr<ChatService::Stub> stub;
 

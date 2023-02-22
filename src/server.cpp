@@ -7,15 +7,15 @@
 
 grpc::Status Server::CreateAccount(grpc::ServerContext *context, const Username *request, Response *response)
 {
-    std::string newUser = info.data;
+    std::string newUser = request->name();
     if (newUser.size() == 0)
     {
-        return grpc::Status(-1, "No username provided");
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "No username provided");
     }
 
     if (userList.find(newUser) != userList.end())
     {
-        return grpc::Status(-1, "User already exists");
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "User already exists");
     }
 
     std::cout << "Creating new account: " << newUser << "\n";
@@ -26,11 +26,11 @@ grpc::Status Server::CreateAccount(grpc::ServerContext *context, const Username 
 
 grpc::Status Server::DeleteAccount(grpc::ServerContext *context, const Username *request, Response *response)
 {
-    std::string user = requester.data;
+    std::string user = request->name();
 
     if (userList.find(user) == userList.end())
     {
-        return grpc::Status(-1, "User does not exist")
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "User does not exist");
     }
 
     std::cout << "Deleting account: " << user << "\n";
@@ -39,10 +39,10 @@ grpc::Status Server::DeleteAccount(grpc::ServerContext *context, const Username 
     return grpc::Status::OK;
 }
 
-grpc::Status Server::ListAccoutns(grpc::ServerContext *context, const ListQuery *request, ListResponse *response)
+grpc::Status Server::ListAccounts(grpc::ServerContext *context, const ListQuery *request, ListResponse *response)
 {
     std::string result;
-    std::string sub = requester.data;
+    std::string sub = request->query();
     std::cout << "Sending account list...\n";
 
     for (auto &user : this->userList)
@@ -58,23 +58,25 @@ grpc::Status Server::ListAccoutns(grpc::ServerContext *context, const ListQuery 
 
 grpc::Status Server::SendMessage(grpc::ServerContext *context, const Message *request, Response *response)
 {
-    messages[message.receiver].push(message);
+    Message* request_copy = new Message(*request);
+    messages[request->receiver().name()].push(request_copy);
 
     return grpc::Status::OK;
 }
 
-grpc::Status Server::MessageStream(grpc::ServerContext *context, const Empty *request, grpc::ServerWriter<::Message> *writer)
+grpc::Status Server::MessageStream(grpc::ServerContext *context, const Username *request, grpc::ServerWriter<::Message> *writer)
 {
-    std::string username = message.data;
+    std::string username = request->name();
 
     std::string result;
     std::cout << "Sending messages for " << username << "...\n";
 
     while (!messages[username].empty())
     {
-        Network::Message msg = messages[username].front();
+        Message* msg = messages[username].front();
         messages[username].pop();
-        result += msg.sender + ": " + msg.data + "\n";
+        writer->Write(*msg);
+        delete msg;
     }
 
     return grpc::Status::OK;
