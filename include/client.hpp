@@ -116,6 +116,13 @@ private:
     std::mutex m;
     std::condition_variable cv;
 
+
+    /**
+     * Message return lock and condition_variable
+    */
+    std::mutex message_m;
+    std::condition_variable message_cv;
+
     /**
      * The currently logged in user.
     */
