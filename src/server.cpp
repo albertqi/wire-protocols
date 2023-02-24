@@ -133,12 +133,11 @@ Network::Message Server::requestMessages(Network::Message message)
     std::string username = message.data;
     std::string result;
 
-    if (username.size() <= 0)
+    if (username.size() <= 0 || username[0] == '\0')
     {
         return {Network::SEND, ""};;
     }
 
-    std::cout << "Trying to acquire message lock for " << username << "\n";
     std::unique_lock lock(messages_lock[username]);
     while (!messages[username].empty())
     {
@@ -176,7 +175,11 @@ int Server::processClient(int socket)
 {
     while (serverRunning)
     {
-        network.receiveOperation(socket);
+        int err = network.receiveOperation(socket);
+        if (err < 0)
+        {
+            break;
+        }
     }
 
     close(socket);
