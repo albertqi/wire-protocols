@@ -17,5 +17,5 @@ add_executable(client src/client.cpp src/network.cpp src/callback.cpp src/client
 add_executable(test test/test.cpp src/client.cpp src/server.cpp src/network.cpp
                     src/callback.cpp)
 
-target_link_libraries(server ${SQLITE3_LIBRARIES})
-target_link_libraries(test ${SQLITE3_LIBRARIES})
+target_link_libraries(server SQLite::SQLite3)
+target_link_libraries(test SQLite::SQLite3)
