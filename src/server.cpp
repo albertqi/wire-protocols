@@ -4,6 +4,7 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include <sqlite3.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -11,7 +12,7 @@
 #include "server.hpp"
 
 Server::Server(int port)
-{   
+{
     // Initialize socket
     serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (serverFd < 0)
@@ -56,6 +57,22 @@ Server::Server(int port)
     network.registerCallback(Network::LIST, Callback(this, &Server::listAccounts));
     network.registerCallback(Network::REQUEST, Callback(this, &Server::requestMessages));
 
+    // Open database.
+    int r = sqlite3_open("server.db", &db);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
+    // Create users table if it does not already exist.
+    r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY)", NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
     serverRunning = true;
 }
 
@@ -66,35 +83,68 @@ void Server::stopServer()
 
 Network::Message Server::createAccount(Network::Message info)
 {
-    std::unique_lock lock(userListLock);
-    std::string newUser = info.data;
-    if (newUser.size() == 0)
+    std::string user = info.data;
+    if (user.size() == 0)
     {
         return {Network::ERROR, "No username provided"};
     }
 
-    if (userList.find(newUser) != userList.end())
+    std::string existingUsers = "";
+    std::string sql = std::string("SELECT username FROM users WHERE username = '") + user + "'";
+
+    auto callback = [](void *data, int numCols, char **colData, char **colNames) -> int
+    {
+        std::string username = colData[0];
+        std::string *existingUsers = (std::string *)data;
+        *existingUsers = username;
+        return 0;
+    };
+
+    int r = sqlite3_exec(db, sql.c_str(), callback, &existingUsers, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
+    if (existingUsers.length() > 0)
     {
         return {Network::ERROR, "User already exists"};
     }
 
-    userList.insert(newUser);
+    // THREAD SAFETY: WHAT IF USER IS CREATED HERE???
 
-    return {Network::CREATE, newUser};
+    sql = std::string("INSERT INTO users VALUES ('") + user + "')";
+    r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
+    return {Network::CREATE, user};
 }
 
 Network::Message Server::listAccounts(Network::Message requester)
 {
-    std::unique_lock lock(userListLock);
     std::string result;
-    std::string sub = requester.data;
 
-    for (auto &user : this->userList)
+    std::string substr = requester.data;
+    std::string sql = std::string("SELECT username FROM users WHERE username LIKE '%") + substr + "%'";
+
+    auto callback = [](void *data, int numCols, char **colData, char **colNames) -> int
     {
-        if (user.find(sub) != std::string::npos)
-        {
-            result += user + "\n";
-        }
+        std::string username = colData[0];
+        std::string *result = (std::string *)data;
+        *result += username + "\n";
+        return 0;
+    };
+
+    int r = sqlite3_exec(db, sql.c_str(), callback, &result, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
     }
 
     return {Network::LIST, result};
@@ -102,16 +152,42 @@ Network::Message Server::listAccounts(Network::Message requester)
 
 Network::Message Server::deleteAccount(Network::Message requester)
 {
-    std::unique_lock lock(userListLock);
     std::string user = requester.data;
 
-    if (userList.find(user) == userList.end())
+    std::string existingUsers = "";
+    std::string sql = std::string("SELECT username FROM users WHERE username = '") + user + "'";
+
+    auto callback = [](void *data, int numCols, char **colData, char **colNames) -> int
+    {
+        std::string username = colData[0];
+        std::string *existingUsers = (std::string *)data;
+        *existingUsers = username;
+        return 0;
+    };
+
+    int r = sqlite3_exec(db, sql.c_str(), callback, &existingUsers, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
+    if (existingUsers.length() == 0)
     {
         return {Network::ERROR, "User does not exist"};
     }
 
-    userList.erase(user);
-    messages_lock.erase(user);
+    // THREAD SAFETY: WHAT IF USER IS DELETED HERE???
+
+    sql = std::string("DELETE FROM users WHERE username = '") + user + "'";
+    r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
+    // TODO: DROP USER'S MESSAGES IN QUEUE
 
     return {Network::DELETE, user};
 }
