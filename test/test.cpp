@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <vector>
 
 #define PADDED_LENGTH 50
 
@@ -221,29 +222,37 @@ void testClient(Server &server, Client &client)
 
 int main()
 {
-    Server server(1111);
+    std::vector<std::pair<std::string, int>> serverList{{"127.0.0.1:3000", 0}, {"127.0.0.1:3001", 1}, {"127.0.0.1:3002", 2}};
+
+    std::vector<std::pair<std::string, int>> replicas0{{"127.0.0.1:3001", 1}, {"127.0.0.1:3002", 2}};
+    std::vector<std::pair<std::string, int>> replicas1{{"127.0.0.1:3000", 0}, {"127.0.0.1:3002", 2}};
+    std::vector<std::pair<std::string, int>> replicas2{{"127.0.0.1:3000", 0}, {"127.0.0.1:3001", 1}};
+
+    Server server0(3000, 0, replicas0);
+    Server server1(3001, 1, replicas1);
+    Server server2(3002, 2, replicas2);
 
     std::cerr << "\nRUNNING INITIAL TESTS..." << std::endl;
-    std::thread t([&server]()
+    std::thread t([&server0]()
     {
-        test(server.acceptClient() == 0, "acceptClient");
+        test(server0.acceptClient() == 0, "acceptClient");
     });
 
-    Client client("127.0.0.1", 1111);
+    Client client(serverList);
     t.join();
 
     std::cerr << "\nRUNNING SERVER TESTS..." << std::endl;
-    testServer(server, client);
+    testServer(server0, client);
 
     std::cerr << "\nRUNNING CLIENT TESTS..." << std::endl;
-    testClient(server, client);
+    testClient(server0, client);
 
     client.stopClient();
 
     std::cerr << "\nRUNNING FINAL TESTS..." << std::endl;
     test(!client.clientRunning, "clientRunning stopped");
 
-    server.stopServer();
+    server0.stopServer();
 
     std::string msg = allTestsPassed ? "\nALL TESTS PASSED :)\n" :
                                        "\nSOME TESTS FAILED :(\n";

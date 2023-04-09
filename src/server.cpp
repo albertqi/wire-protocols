@@ -58,29 +58,31 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     // Connect to other server replicas.
     for (auto server : replica_addrs)
     {
-        // Initialize new socket to talk to replicas.
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (serverFd < 0)
-        {
-            perror("socket()");
-            exit(1);   
-        }
-
+        int sock;
         struct sockaddr_in serverAddress;
-        serverAddress.sin_family = AF_INET;
-        serverAddress.sin_port = htons(server.second);
-        if (inet_pton(AF_INET, server.first.c_str(), &serverAddress.sin_addr) <= 0)
+        do
         {
-            perror("inet_pton()");
-            exit(1);
-        }
-        
-        // Connect to replica.
-        while (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
-        {
-            std::cout << "Re-trying connection to replica..." << std::endl;
+            // Initialize new socket to talk to replicas.
+            sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (serverFd < 0)
+            {
+                perror("socket()");
+                exit(1);
+            }
+
+            serverAddress.sin_family = AF_INET;
+            serverAddress.sin_port = htons(server.second);
+            if (inet_pton(AF_INET, server.first.c_str(), &serverAddress.sin_addr) <= 0)
+            {
+                perror("inet_pton()");
+                exit(1);
+            }
+
+            // Connect to replica.
+            perror("connect()");
+            // std::cout << "Re-trying connection to replica..." << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
+        } while (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0);
 
         replicas.push_back(sock);
     }

@@ -53,7 +53,7 @@ int Client::connectToServer(std::vector<std::pair<std::string, int>> serverList)
     std::unique_lock lk(connection_m);
 
     // Close current socket before trying anything.
-    close(clientFd);
+    // close(clientFd);
 
     for (const auto &server : serverList)
     {
