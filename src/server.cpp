@@ -78,6 +78,7 @@ Network::Message Server::createAccount(Network::Message info)
         return {Network::ERROR, "User already exists"};
     }
 
+    std::cout << "Creating account: " << newUser << "\n";
     userList.insert(newUser);
 
     return {Network::CREATE, newUser};
@@ -97,6 +98,7 @@ Network::Message Server::listAccounts(Network::Message requester)
         }
     }
 
+    std::cout << "Sending account list\n";
     return {Network::LIST, result};
 }
 
@@ -113,6 +115,7 @@ Network::Message Server::deleteAccount(Network::Message requester)
     userList.erase(user);
     messages_lock.erase(user);
 
+    std::cout << "Deleting account: " << user << "\n";
     return {Network::DELETE, user};
 }
 
@@ -121,18 +124,25 @@ Network::Message Server::sendMessage(Network::Message message)
     std::unique_lock lock(messages_lock[message.receiver]);
     messages[message.receiver].push(message);
 
+    std::cout << "Enqueing message from " << message.sender << " to " << message.receiver << "\n";
     return {Network::OK};
 }
 
 Network::Message Server::requestMessages(Network::Message message)
 {
-    std::unique_lock lock(messages_lock[message.receiver]);
     std::string username = message.data;
     std::string result;
 
+    if (username.size() <= 0 || username[0] == '\0')
+    {
+        return {Network::SEND, ""};;
+    }
+
+    std::unique_lock lock(messages_lock[username]);
     while (!messages[username].empty())
     {
         Network::Message msg = messages[username].front();
+        std::cout << "Delivering message to " << username << "\n";
         messages[username].pop();
         result += msg.sender + ": " + msg.data + "\n";
     }
@@ -165,7 +175,11 @@ int Server::processClient(int socket)
 {
     while (serverRunning)
     {
-        network.receiveOperation(socket);
+        int err = network.receiveOperation(socket);
+        if (err < 0)
+        {
+            break;
+        }
     }
 
     close(socket);
