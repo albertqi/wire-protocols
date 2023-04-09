@@ -14,6 +14,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <queue>
 #include <vector>
 
 #include <sqlite3.h>

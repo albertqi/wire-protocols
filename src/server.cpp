@@ -6,7 +6,6 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sqlite3.h>
-#include <queue>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
