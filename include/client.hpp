@@ -16,7 +16,7 @@
 class Client
 {
 public:
-    Client(std::string host, int port);
+    Client(std::vector<std::pair<std::string, int>> serverList);
 
     ~Client();
 
@@ -141,4 +141,9 @@ private:
      * Network `receiveOperation()` thread.
      */
     std::thread opThread;
+
+    /**
+     * Connects to a server in the server list.
+     */
+    int connectToServer(std::vector<std::pair<std::string, int>> serverList);
 };

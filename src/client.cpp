@@ -11,29 +11,12 @@
 
 #include "client.hpp"
 
-Client::Client(std::string host, int port)
+Client::Client(std::vector<std::pair<std::string, int>> serverList)
 {
     // Connect to the server.
-    struct sockaddr_in serverAddress;
-
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(port);
-    if (inet_pton(AF_INET, host.c_str(), &serverAddress.sin_addr) <= 0)
+    if (connectToServer(serverList) < 0)
     {
-        perror("inet_pton()");
-        exit(1);
-    }
-
-    clientFd = socket(AF_INET, SOCK_STREAM, 0);
-    if (clientFd < 0)
-    {
-        perror("socket()");
-        exit(1);
-    }
-
-    if (connect(clientFd, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
-    {
-        perror("connect()");
+        perror("Failed to connect to server");
         exit(1);
     }
 
@@ -48,11 +31,18 @@ Client::Client(std::string host, int port)
     clientRunning = true;
 
     // Start the receive operation thread.
-    opThread = std::thread([this]()
+    opThread = std::thread([this, &serverList]()
     {
         while (clientRunning)
         {
-            network.receiveOperation(clientFd);
+            if (network.receiveOperation(clientFd) < 0)
+            {
+                if (connectToServer(serverList) < 0)
+                {
+                    perror("Failed to connect to server");
+                    clientRunning = false;
+                }
+            }
         }
     });
 }
@@ -60,6 +50,38 @@ Client::Client(std::string host, int port)
 Client::~Client()
 {
     opThread.join();
+}
+
+int Client::connectToServer(std::vector<std::pair<std::string, int>> serverList)
+{
+    for (const auto &server : serverList)
+    {
+        std::string host = std::get<0>(server);
+        int port = std::get<1>(server);
+        struct sockaddr_in serverAddress;
+
+        serverAddress.sin_family = AF_INET;
+        serverAddress.sin_port = htons(port);
+        if (inet_pton(AF_INET, host.c_str(), &serverAddress.sin_addr) <= 0)
+        {
+            continue;
+        }
+
+        clientFd = socket(AF_INET, SOCK_STREAM, 0);
+        if (clientFd < 0)
+        {
+            continue;
+        }
+
+        if (connect(clientFd, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
+        {
+            continue;
+        }
+
+        return 0;
+    }
+
+    return -1;
 }
 
 Network::Message Client::messageCallback(Network::Message message)

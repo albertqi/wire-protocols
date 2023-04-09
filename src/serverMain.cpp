@@ -20,7 +20,7 @@ int main(int argc, char const *argv[])
         exit(1);
     }
 
-     server_config_path = argv[1];
+    server_config_path = argv[1];
 
     if (!std::filesystem::exists(server_config_path))
     {
@@ -44,9 +44,9 @@ int main(int argc, char const *argv[])
 
     int this_port;
 
-    // Parse server config file. 
+    // Parse server config file.
     std::string current_line;
-    for (int i = 0; std::getline(server_cfg, current_line); i++)
+    for (int i = 0; std::getline(server_cfg, current_line); ++i)
     {
         int colon_index = current_line.find(":");
         std::string server_ip = current_line.substr(0, colon_index);
@@ -57,7 +57,7 @@ int main(int argc, char const *argv[])
         {
             this_port = server_port;
         }
-        // Put the server in the list of replicas
+        // Put the server in the list of replicas.
         else
         {
             replicas.push_back({server_ip, server_port});
