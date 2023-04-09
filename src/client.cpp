@@ -50,10 +50,14 @@ Client::~Client()
 
 int Client::connectToServer(std::vector<std::pair<std::string, int>> serverList)
 {
-    std::unique_lock lk(connection_m);
+    std::unique_lock lk(connection_m, std::defer_lock);
+    if (!lk.try_lock())
+    {
+        return 0;
+    }
 
     // Close current socket before trying anything.
-    // close(clientFd);
+    close(clientFd);
 
     for (const auto &server : serverList)
     {
