@@ -13,7 +13,7 @@
 #include "server.hpp"
 
 Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>> replica_addrs)
-: replicaId(replicaId)
+    : replicaId(replicaId)
 {
     network.dropServerResponses = true;
     network.isServer = true;
@@ -96,7 +96,8 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     network.registerCallback(Network::REQUEST, Callback(this, &Server::requestMessages));
 
     // Open database.
-    int r = sqlite3_open("server.db", &db);
+    std::string db_name = "server_" + std::to_string(port) + ".db";
+    int r = sqlite3_open(db_name.c_str(), &db);
     if (r != SQLITE_OK)
     {
         perror(sqlite3_errmsg(db));
@@ -307,8 +308,6 @@ Network::Message Server::requestMessages(Network::Message message)
         *result += std::string("[") + timestamp + "] " + sender + ": " + messageText + "\n";
         return 0;
     };
-
-    std::cout << "Delivering messages to " << user << "\n";
 
     int r = sqlite3_exec(db, sql.c_str(), callback, &result, NULL);
     if (r != SQLITE_OK)

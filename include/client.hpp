@@ -143,6 +143,9 @@ private:
      */
     std::thread opThread;
 
+    std::mutex connection_m;
+    std::vector<std::pair<std::string, int>> serverList;
+
     /**
      * Connects to a server in the server list.
      */

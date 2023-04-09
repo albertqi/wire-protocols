@@ -8,18 +8,16 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
+#include <csignal>
 
 #include "client.hpp"
 
 Client::Client(std::vector<std::pair<std::string, int>> serverList)
+    : serverList(serverList)
 {
     // Connect to the server.
-    if (connectToServer(serverList) < 0)
-    {
-        perror("Failed to connect to server");
-        exit(1);
-    }
-
+    connectToServer(serverList);
+    
     // Register callbacks
     network.registerCallback(Network::OK, Callback(this, &Client::messageCallback));
     network.registerCallback(Network::CREATE, Callback(this, &Client::handleCreateResponse));
@@ -28,20 +26,18 @@ Client::Client(std::vector<std::pair<std::string, int>> serverList)
     network.registerCallback(Network::SEND, Callback(this, &Client::handleReceive));
     network.registerCallback(Network::ERROR, Callback(this, &Client::messageCallback));
 
+    signal(SIGPIPE, SIG_IGN);
+
     clientRunning = true;
 
     // Start the receive operation thread.
-    opThread = std::thread([this, &serverList]()
+    opThread = std::thread([this]()
     {
         while (clientRunning)
         {
             if (network.receiveOperation(clientFd) < 0)
             {
-                if (connectToServer(serverList) < 0)
-                {
-                    perror("Failed to connect to server");
-                    clientRunning = false;
-                }
+                connectToServer(this->serverList);
             }
         }
     });
@@ -54,6 +50,11 @@ Client::~Client()
 
 int Client::connectToServer(std::vector<std::pair<std::string, int>> serverList)
 {
+    std::unique_lock lk(connection_m);
+
+    // Close current socket before trying anything.
+    close(clientFd);
+
     for (const auto &server : serverList)
     {
         std::string host = std::get<0>(server);
@@ -80,6 +81,9 @@ int Client::connectToServer(std::vector<std::pair<std::string, int>> serverList)
 
         return 0;
     }
+
+    perror("Failed to connect to server.");
+    clientRunning = false;
 
     return -1;
 }
@@ -137,7 +141,12 @@ Network::Message Client::handleReceive(Network::Message message)
 std::string Client::createAccount(std::string username)
 {
     std::unique_lock lock(m);
-    network.sendMessage(clientFd, {Network::CREATE, username});
+    int ret = network.sendMessage(clientFd, {Network::CREATE, username});
+    if (ret < 0)
+    {
+        connectToServer(serverList);
+        return "Failed to create account. Please try again.";
+    }
     cv.wait(lock);
     return opResult;
 }
@@ -145,7 +154,12 @@ std::string Client::createAccount(std::string username)
 std::string Client::getAccountList(std::string sub)
 {
     std::unique_lock lock(m);
-    network.sendMessage(clientFd, {Network::LIST, sub});
+    int ret = network.sendMessage(clientFd, {Network::LIST, sub});
+    if (ret < 0)
+    {
+        connectToServer(serverList);
+        return "Failed to get account list. Please try again.";
+    }
     cv.wait(lock);
     return opResult;
 }
@@ -153,7 +167,12 @@ std::string Client::getAccountList(std::string sub)
 std::string Client::deleteAccount(std::string username)
 {
     std::unique_lock lock(m);
-    network.sendMessage(clientFd, {Network::DELETE, username});
+    int ret = network.sendMessage(clientFd, {Network::DELETE, username});
+    if (ret < 0)
+    {
+        connectToServer(serverList);
+        return "Failed to get delete account. Please try again.";
+    }
     cv.wait(lock);
     return opResult;
 }
@@ -161,7 +180,12 @@ std::string Client::deleteAccount(std::string username)
 std::string Client::sendMessage(Network::Message message)
 {
     std::unique_lock lock(m);
-    network.sendMessage(clientFd, message);
+    int ret = network.sendMessage(clientFd, message);
+    if (ret < 0)
+    {
+        connectToServer(serverList);
+        return "Failed to get send message. Please try again.";
+    }
     cv.wait(lock);
     return opResult;
 }
@@ -169,7 +193,12 @@ std::string Client::sendMessage(Network::Message message)
 std::string Client::requestMessages()
 {
     std::unique_lock lock(message_m);
-    network.sendMessage(clientFd, {Network::REQUEST, currentUser});
+    int ret = network.sendMessage(clientFd, {Network::REQUEST, currentUser});
+    if (ret < 0)
+    {
+        connectToServer(serverList);
+        return "";
+    }
     message_cv.wait(lock);
     return opResultMessages;
 }
