@@ -6,13 +6,18 @@
 #include <unistd.h>
 #include <sqlite3.h>
 
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
 #include "server.hpp"
 
-Server::Server(int port)
+Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>> replica_addrs)
+: replicaId(replicaId)
 {
+    network.dropServerResponses = true;
+    network.isServer = true;
+
     // Initialize socket
     serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (serverFd < 0)
@@ -49,6 +54,39 @@ Server::Server(int port)
 
     // Ignore SIGPIPE on unexpected client disconnects.
     signal(SIGPIPE, SIG_IGN);
+
+    // Connect to other server replicas.
+    for (auto server : replica_addrs)
+    {
+        // Initialize new socket to talk to replicas.
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (serverFd < 0)
+        {
+            perror("socket()");
+            exit(1);   
+        }
+
+        struct sockaddr_in serverAddress;
+        serverAddress.sin_family = AF_INET;
+        serverAddress.sin_port = htons(server.second);
+        if (inet_pton(AF_INET, server.first.c_str(), &serverAddress.sin_addr) <= 0)
+        {
+            perror("inet_pton()");
+            exit(1);
+        }
+        
+        // Connect to replica.
+        while (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
+        {
+            std::cout << "Re-trying connection to replica..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        replicas.push_back(sock);
+    }
+
+    // TODO: Repace with actual leader election.
+    isLeader = replicaId == 1;
 
     // Register callbacks.
     network.registerCallback(Network::CREATE, Callback(this, &Server::createAccount));
@@ -90,8 +128,25 @@ void Server::stopServer()
     serverRunning = false;
 }
 
+void Server::doReplication(Network::Message message)
+{
+    // If we're not the leader, nothing to do.
+    if (!isLeader)
+    {
+        return;
+    }
+
+    // Otherwise, tell the replicas about the new message.
+    for (auto socket : replicas)
+    {
+        network.sendMessage(socket, message);
+    }
+}
+
 Network::Message Server::createAccount(Network::Message info)
 {
+    doReplication(info);
+
     std::string user = info.data;
     if (user.size() == 0)
     {
@@ -163,6 +218,8 @@ Network::Message Server::listAccounts(Network::Message requester)
 
 Network::Message Server::deleteAccount(Network::Message requester)
 {
+    doReplication(requester);
+
     std::string user = requester.data;
 
     std::string existingUsers = "";
@@ -200,11 +257,13 @@ Network::Message Server::deleteAccount(Network::Message requester)
 
     // TODO: DROP USER'S MESSAGES IN QUEUE
 
-    return {Network::DELETE, user};
+    return {Network::DELETE, user, .is_server = true};
 }
 
 Network::Message Server::sendMessage(Network::Message message)
 {
+    doReplication(message);
+
     std::string sender = message.sender, receiver = message.receiver;
     std::string messageText = message.data;
 
@@ -223,6 +282,8 @@ Network::Message Server::sendMessage(Network::Message message)
 
 Network::Message Server::requestMessages(Network::Message message)
 {
+    doReplication(message);
+
     std::string result;
 
     std::string user = message.data;

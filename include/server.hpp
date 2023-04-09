@@ -22,7 +22,7 @@
 class Server
 {
 public:
-    Server(int port, int replicaId, std::vector<std::pair<std::string, int>> replicas);
+    Server(int port, int replicaId, std::vector<std::pair<std::string, int>> replica_addrs);
 
     ///////////////////// Server functions /////////////////////
 
@@ -81,6 +81,11 @@ private:
     int replicaId;
 
     /**
+     * Flags whether this instance is the leader of the replicas.
+     */
+    bool isLeader;
+
+    /**
      * Controls how long to run client processing threads.
      */
     std::atomic<bool> serverRunning;
@@ -104,4 +109,6 @@ private:
      * Thread function that is spawned to handle each client connection.
      */
     int processClient(int socket);
+
+    void doReplication(Network::Message);
 };

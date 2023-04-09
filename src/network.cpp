@@ -62,6 +62,12 @@ int Network::receiveOperation(int socket)
     };
     Message output;
 
+    // Message originated from server, and we don't care about those.
+    if (header.isServer && dropServerResponses)
+    {
+        return err;
+    }
+
     // Check that a callback has been registered for the received operation.
     if (registered_callbacks.find(header.operation) != registered_callbacks.end())
     {
@@ -91,7 +97,8 @@ int Network::sendMessage(int socket, Message message)
         message.operation,
         message.sender.size(),
         message.receiver.size(),
-        message.data.size()
+        message.data.size(),
+        isServer
     };
 
     int err;

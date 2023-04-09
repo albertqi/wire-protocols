@@ -99,6 +99,10 @@ public:
         SEND, // Contains data, sender, receiver
         LIST,
 
+        // Server -> Server operations.
+        LEADER,
+        IDENTIFY,
+
         // Other
         UNSUPPORTED_OP,
         NO_RETURN
@@ -116,6 +120,7 @@ public:
         std::string data;
         std::string sender;
         std::string receiver;
+        bool is_server;
     };
 
     /**
@@ -149,6 +154,16 @@ public:
      */
     void registerCallback(OpCode operation, Callback function);
 
+    /**
+     * Whether or not to drop responses originating from a server.
+    */
+    bool dropServerResponses;
+
+    /**
+     * Whether or not to mark messages as originating from a server.
+    */
+    bool isServer;
+
 private:
 
     /**
@@ -167,6 +182,8 @@ private:
         // Length of the data following this metadata header
         // (not including the sender/recvier information).
         uint64_t dataLength;
+        // If this message originate from a server.
+        bool isServer;
     };
 
     /**
