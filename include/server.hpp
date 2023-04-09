@@ -3,7 +3,7 @@
  * clients. This class keeps track of user accounts, backlogged messages, and
  * sends messages to users on demand.
  *
- * This class uses the `Network` class to handle parsing the wire protocol, and
+ * This class uses the `Network` class to handle parsing the wire protocol and
  * registers each function as a callback for the various operation it chooses
  * to handle.
  */
@@ -11,13 +11,8 @@
 #pragma once
 
 #include <atomic>
-#include <mutex>
 #include <thread>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-#include <queue>
 #include <sqlite3.h>
 
 #include "network.hpp"
@@ -89,12 +84,6 @@ private:
      * Stores the database connection.
      */
     sqlite3 *db;
-
-    /**
-     * Stores the undelivered messages for each user.
-     */
-    std::unordered_map<std::string, std::queue<Network::Message>> messages;
-    std::unordered_map<std::string, std::mutex> messages_lock;
 
     /**
      * The network instance acting as the data-link layer.

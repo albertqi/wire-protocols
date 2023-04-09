@@ -73,11 +73,20 @@ Server::Server(int port)
         exit(1);
     }
 
+    // Create messages table if it does not already exist.
+    r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, sender TEXT, receiver TEXT, message TEXT, timestamp TEXT, FOREIGN KEY(receiver) REFERENCES users(username))", NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
     serverRunning = true;
 }
 
 void Server::stopServer()
 {
+    sqlite3_close(db);
     serverRunning = false;
 }
 
@@ -194,23 +203,54 @@ Network::Message Server::deleteAccount(Network::Message requester)
 
 Network::Message Server::sendMessage(Network::Message message)
 {
-    std::unique_lock lock(messages_lock[message.receiver]);
-    messages[message.receiver].push(message);
+    std::string sender = message.sender, receiver = message.receiver;
+    std::string messageText = message.data;
+
+    std::string sql = std::string("INSERT INTO messages (sender, receiver, message, timestamp) VALUES ('") + sender + "', '" + receiver + "', '" + messageText + "', datetime('now'))";
+    int r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
 
     return {Network::OK};
 }
 
 Network::Message Server::requestMessages(Network::Message message)
 {
-    std::unique_lock lock(messages_lock[message.receiver]);
-    std::string username = message.data;
     std::string result;
 
-    while (!messages[username].empty())
+    std::string user = message.data;
+    std::string sql = std::string("SELECT sender, message, timestamp FROM messages WHERE receiver = '") + user + "' ORDER BY timestamp";
+
+    auto callback = [](void *data, int numCols, char **colData, char **colNames) -> int
     {
-        Network::Message msg = messages[username].front();
-        messages[username].pop();
-        result += msg.sender + ": " + msg.data + "\n";
+        if (numCols != 3)
+        {
+            perror("Invalid number of columns");
+            exit(1);
+        }
+
+        std::string sender = colData[0], messageText = colData[1], timestamp = colData[2];
+        std::string *result = (std::string *)data;
+        *result += std::string("[") + timestamp + "] " + sender + ": " + messageText + "\n";
+        return 0;
+    };
+
+    int r = sqlite3_exec(db, sql.c_str(), callback, &result, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
+    sql = std::string("DELETE FROM messages WHERE receiver = '") + user + "'";
+    r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
     }
 
     return {Network::SEND, result};
