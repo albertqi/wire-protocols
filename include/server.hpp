@@ -11,8 +11,9 @@
 #pragma once
 
 #include <atomic>
-#include <thread>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <sqlite3.h>
@@ -105,10 +106,20 @@ private:
      */
     Network network;
 
+    std::mutex replicas_m;
+    std::priority_queue<int> runningReplicas;
+
     /**
      * Thread function that is spawned to handle each client connection.
      */
     int processClient(int socket);
 
-    void doReplication(Network::Message);
+    /**
+     * Forwards `message` to the other replicas if this instance is the leader.
+     */
+    void doReplication(Network::Message message);
+
+    void doLeaderElection();
+
+    Network::Message handleIdentify(Network::Message id);
 };
