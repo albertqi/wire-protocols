@@ -108,6 +108,7 @@ Network::Message Client::handleList(Network::Message message)
 Network::Message Client::handleReceive(Network::Message message)
 {
     opResultMessages = message.data;
+    message_cv.notify_all();
     return {Network::NO_RETURN};
 }
 
@@ -145,7 +146,9 @@ std::string Client::sendMessage(Network::Message message)
 
 std::string Client::requestMessages()
 {
+    std::unique_lock lock(message_m);
     network.sendMessage(clientFd, {Network::REQUEST, currentUser});
+    message_cv.wait(lock);
     return opResultMessages;
 }
 

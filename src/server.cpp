@@ -121,7 +121,7 @@ Network::Message Server::createAccount(Network::Message info)
         return {Network::ERROR, "User already exists"};
     }
 
-    // THREAD SAFETY: WHAT IF USER IS CREATED HERE???
+    std::cout << "Creating account: " << user << "\n";
 
     sql = std::string("INSERT INTO users VALUES ('") + user + "')";
     r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
@@ -156,6 +156,8 @@ Network::Message Server::listAccounts(Network::Message requester)
         exit(1);
     }
 
+    std::cout << "Sending account list\n";
+
     return {Network::LIST, result};
 }
 
@@ -186,7 +188,7 @@ Network::Message Server::deleteAccount(Network::Message requester)
         return {Network::ERROR, "User does not exist"};
     }
 
-    // THREAD SAFETY: WHAT IF USER IS DELETED HERE???
+    std::cout << "Deleting account: " << user << "\n";
 
     sql = std::string("DELETE FROM users WHERE username = '") + user + "'";
     r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
@@ -206,6 +208,8 @@ Network::Message Server::sendMessage(Network::Message message)
     std::string sender = message.sender, receiver = message.receiver;
     std::string messageText = message.data;
 
+    std::cout << "Enqueing message from " << sender << " to " << receiver << "\n";
+
     std::string sql = std::string("INSERT INTO messages (sender, receiver, message, timestamp) VALUES ('") + sender + "', '" + receiver + "', '" + messageText + "', datetime('now'))";
     int r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
     if (r != SQLITE_OK)
@@ -222,6 +226,11 @@ Network::Message Server::requestMessages(Network::Message message)
     std::string result;
 
     std::string user = message.data;
+    if (user.size() <= 0 || user[0] == '\0')
+    {
+        return {Network::SEND, ""};
+    }
+
     std::string sql = std::string("SELECT sender, message, timestamp FROM messages WHERE receiver = '") + user + "' ORDER BY timestamp";
 
     auto callback = [](void *data, int numCols, char **colData, char **colNames) -> int
@@ -237,6 +246,8 @@ Network::Message Server::requestMessages(Network::Message message)
         *result += std::string("[") + timestamp + "] " + sender + ": " + messageText + "\n";
         return 0;
     };
+
+    std::cout << "Delivering messages to " << user << "\n";
 
     int r = sqlite3_exec(db, sql.c_str(), callback, &result, NULL);
     if (r != SQLITE_OK)
@@ -281,7 +292,11 @@ int Server::processClient(int socket)
 {
     while (serverRunning)
     {
-        network.receiveOperation(socket);
+        int err = network.receiveOperation(socket);
+        if (err < 0)
+        {
+            break;
+        }
     }
 
     close(socket);
