@@ -9,10 +9,19 @@
 /**
  * Terminal user-interface that lets the user communicate with the server and
  * other clients.
-*/
+ */
 int main(int argc, char const *argv[])
 {
-    Client client("127.0.0.1", 1111);
+    if (argc < 3)
+    {
+        std::cerr << "Usage: ./client [HOST] [PORT]" << std::endl;
+        return -1;
+    }
+
+    std::string host = argv[1];
+    int port = std::stoi(argv[2]);
+
+    Client client(host, port);
 
     std::thread msg_thread([&client]()
     {
