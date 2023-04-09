@@ -86,7 +86,8 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     }
 
     // TODO: Repace with actual leader election.
-    isLeader = replicaId == 1;
+    isLeader = replicaId == 0;
+    network.isServer = replicaId != 0;
 
     // Register callbacks.
     network.registerCallback(Network::CREATE, Callback(this, &Server::createAccount));
