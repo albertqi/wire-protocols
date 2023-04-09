@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_set>
 #include <thread>
+#include <vector>
 
 class Client
 {

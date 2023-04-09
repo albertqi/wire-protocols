@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "client.hpp"
 
