@@ -27,8 +27,8 @@ The following commands are available to the client:
 
 ```
 list [substr] # Lists all users that contain [substr]
-create (user) # Creates account with username (user), which must be unique.
-login (user)  # Logs in as (user), if exists.
+create (user) # Creates account with username (user), which must be unique
+login (user)  # Logs in as (user), if exists
 send (user)   # Allows current user to send message to (user)
 delete        # Deletes current user
 exit          # Exits client
