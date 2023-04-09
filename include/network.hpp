@@ -100,8 +100,9 @@ public:
         LIST,
 
         // Server -> Server operations.
-        LEADER,
-        IDENTIFY,
+        IDENTIFY, // Contains data
+        SYNC, // Contains data
+        TIME, // Contains data
 
         // Other
         UNSUPPORTED_OP,
@@ -120,7 +121,6 @@ public:
         std::string data;
         std::string sender;
         std::string receiver;
-        bool is_server;
     };
 
     /**
