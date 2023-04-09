@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,6 +6,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sqlite3.h>
+#include <queue>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -58,9 +60,18 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     // Connect to other server replicas.
     for (auto server : replica_addrs)
     {
-        int sock;
         struct sockaddr_in serverAddress;
-        do
+        serverAddress.sin_family = AF_INET;
+        serverAddress.sin_port = htons(server.second);
+        if (inet_pton(AF_INET, server.first.c_str(), &serverAddress.sin_addr) <= 0)
+        {
+            perror("inet_pton()");
+            exit(1);
+        }
+
+        // Keep trying to connect until successful.
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        while (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
         {
             // Initialize new socket to talk to replicas.
             sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -69,20 +80,9 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
                 perror("socket()");
                 exit(1);
             }
-
-            serverAddress.sin_family = AF_INET;
-            serverAddress.sin_port = htons(server.second);
-            if (inet_pton(AF_INET, server.first.c_str(), &serverAddress.sin_addr) <= 0)
-            {
-                perror("inet_pton()");
-                exit(1);
-            }
-
-            // Connect to replica.
-            perror("connect()");
-            // std::cout << "Re-trying connection to replica..." << std::endl;
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        } while (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0);
+            std::cout << "Re-trying connection to replica..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
 
         replicas.push_back(sock);
     }
@@ -92,6 +92,7 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     network.isServer = replicaId != 0;
 
     // Register callbacks.
+    network.registerCallback(Network::IDENTIFY, Callback(this, &Server::handleIdentify));
     network.registerCallback(Network::CREATE, Callback(this, &Server::createAccount));
     network.registerCallback(Network::DELETE, Callback(this, &Server::deleteAccount));
     network.registerCallback(Network::SEND, Callback(this, &Server::sendMessage));
@@ -130,21 +131,6 @@ void Server::stopServer()
 {
     sqlite3_close(db);
     serverRunning = false;
-}
-
-void Server::doReplication(Network::Message message)
-{
-    // If we're not the leader, nothing to do.
-    if (!isLeader)
-    {
-        return;
-    }
-
-    // Otherwise, tell the replicas about the new message.
-    for (auto socket : replicas)
-    {
-        network.sendMessage(socket, message);
-    }
 }
 
 Network::Message Server::createAccount(Network::Message info)
@@ -261,7 +247,7 @@ Network::Message Server::deleteAccount(Network::Message requester)
 
     // TODO: DROP USER'S MESSAGES IN QUEUE
 
-    return {Network::DELETE, user, .is_server = true};
+    return {Network::DELETE, user};
 }
 
 Network::Message Server::sendMessage(Network::Message message)
@@ -330,6 +316,58 @@ Network::Message Server::requestMessages(Network::Message message)
     return {Network::SEND, result};
 }
 
+Network::Message Server::handleIdentify(Network::Message message)
+{
+    std::unique_lock lk(replicas_m);
+    try
+    {
+        int id = std::stoi(message.data);
+        runningReplicas.push(id);
+    }
+    catch (...) {}
+
+    return {Network::NO_RETURN};
+}
+
+void Server::doLeaderElection()
+{
+    std::unique_lock lk(replicas_m);
+    runningReplicas.push(replicaId);
+    lk.unlock();
+
+    // Send out id to other replicas.
+    for (auto socket : replicas)
+    {
+        network.sendMessage(socket, {Network::IDENTIFY, std::to_string(replicaId)});
+    }
+
+    // Wait to receive ids from other replicas.
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    int minId = runningReplicas.top();
+    if (minId == replicaId)
+    {
+        isLeader = true;
+    }
+
+    runningReplicas = std::priority_queue<int>();
+}
+
+void Server::doReplication(Network::Message message)
+{
+    // If we're not the leader, nothing to do.
+    if (!isLeader)
+    {
+        return;
+    }
+
+    // Otherwise, tell the replicas about the new message.
+    for (auto socket : replicas)
+    {
+        network.sendMessage(socket, message);
+    }
+}
+
 int Server::acceptClient()
 {
     int clientSocket;
@@ -345,6 +383,21 @@ int Server::acceptClient()
         return clientSocket;
     }
 
+    // Clients aren't allowed to connect directly to replicas.
+    if (!isLeader)
+    {
+        close(clientSocket);
+        return 0;
+    }
+
+    // Enable TCP KeepAlive to ensure we're notified if the leader goes down.
+    int enable = 1;
+    if (setsockopt(serverFd, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(int)) < 0)
+    {
+        perror("setsockopt()");
+        exit(1);
+    }
+
     std::thread socketThread(&Server::processClient, this, clientSocket);
     socketThread.detach();
 
@@ -358,6 +411,16 @@ int Server::processClient(int socket)
         int err = network.receiveOperation(socket);
         if (err < 0)
         {
+            // The leader has fallen...
+            auto replicaIndex = std::find(replicas.begin(), replicas.end(), socket);
+            if (replicaIndex != replicas.end())
+            {
+                replicas.erase(replicaIndex);
+                if (!isLeader)
+                {
+                    doLeaderElection();
+                }
+            }
             break;
         }
     }
