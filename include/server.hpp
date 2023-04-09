@@ -13,6 +13,8 @@
 #include <atomic>
 #include <thread>
 #include <string>
+#include <vector>
+
 #include <sqlite3.h>
 
 #include "network.hpp"
@@ -20,7 +22,7 @@
 class Server
 {
 public:
-    Server(int port);
+    Server(int port, int replicaId, std::vector<std::pair<std::string, int>> replicas);
 
     ///////////////////// Server functions /////////////////////
 
@@ -74,9 +76,19 @@ private:
     int serverFd;
 
     /**
+     * The ID of this instance in relation to the other replicas.
+     */
+    int replicaId;
+
+    /**
      * Controls how long to run client processing threads.
      */
     std::atomic<bool> serverRunning;
+
+    /**
+     * List of sockets to the other replicas.
+     */
+    std::vector<int> replicas;
 
     /**
      * Stores the database connection.

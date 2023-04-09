@@ -57,10 +57,10 @@ int main(int argc, char const *argv[])
         {
             this_port = server_port;
         }
-        // Put the server in 
+        // Put the server in the list of replicas
         else
         {
-            replicas.push_back(std::make_pair(server_ip, server_port));
+            replicas.push_back({server_ip, server_port});
         }
     }
 
