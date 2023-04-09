@@ -108,6 +108,14 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
         exit(1);
     }
 
+    // Enable foreign keys.
+    r = sqlite3_exec(db, "PRAGMA foreign_keys = ON", NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        exit(1);
+    }
+
     // Create users table if it does not already exist.
     r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY)", NULL, NULL, NULL);
     if (r != SQLITE_OK)
@@ -117,7 +125,7 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     }
 
     // Create messages table if it does not already exist.
-    r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, sender TEXT, receiver TEXT, message TEXT, timestamp TEXT, FOREIGN KEY(receiver) REFERENCES users(username))", NULL, NULL, NULL);
+    r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, sender TEXT, receiver TEXT, message TEXT, timestamp TEXT, FOREIGN KEY(receiver) REFERENCES users(username) ON DELETE CASCADE)", NULL, NULL, NULL);
     if (r != SQLITE_OK)
     {
         perror(sqlite3_errmsg(db));
