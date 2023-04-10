@@ -12,8 +12,8 @@
  *    `sendMessage()`.
  *
  * Communication over the network and the parsing of operations, metadata, and
- * data are handled by this class as well. Notably, this class does not initate
- * connections or handle the closing (unexepected or intentional) of connections.
+ * data are handled by this class as well. Notably, this class does not initiate
+ * connections or handle the closing (unexpected or intentional) of connections.
  * The user of this class must handle possible `SIGPIPE`s and manage the socket
  * file descriptor.
  *
@@ -28,7 +28,7 @@
  * > Data length (8 bytes)
  * ///////// Data /////////
  * > Sender information of length `senderLength` (Could be 0)
- * > Reciever information of length `recieverLength` (Could be 0)
+ * > Receiver information of length `receiverLength` (Could be 0)
  * > Operation data of length `dataLength`
  *
  * Any data received by this class that does not follow the above protocol will
@@ -39,26 +39,27 @@
  * Function information and return values:
  * All functions in `Network` return an int which is the return value of network
  * operation used in the function. If a function has an additional return value,
- * it is returned in an output parameter at the end of the argument list, marked
- * by <argumentName>Out.
+ * then it is returned in an output parameter at the end of the argument list,
+ * marked by <argumentName>Out.
  *
  * Network return values and error codes:
- * Errors from the server to the client are returned using the `ERROR` op code.
- * The client is not allowed to send errors to the server. Normal return values
- * from the server will be sent to the client using the appropriate operation.
- * For messages, the client will receive a `SEND` operation. For a list of users,
- * the client will receive a `LIST`. For any other void function such as sending
- * a message to another user, the client will receive `OK` on success, or `ERROR`
- * with a message on failure.
+ * Errors from the server to the client are returned using the `ERROR` operation
+ * code. The client is not allowed to send errors to the server. Normal return
+ * values from the server will be sent to the client using the appropriate
+ * operation. For messages, the client will receive a `SEND` operation. For a
+ * list of users, the client will receive a `LIST`. For any other void function
+ * such as sending a message to another user, the client will receive `OK` on
+ * success, or `ERROR` with a message on failure.
  *
- * Callbacks and Receiving Data from the Client/Server:
+ * Callbacks and receiving data from the client/server:
  * When the `receiveOperation()` function is called by either the client or
  * server, the function will block until an `OpCode` is received on the
  * designated socket. Any subsequent data received will be parsed by this class
  * and passed to the registered callback for that operation in a `Message`
  * object. The fields of the `Message` object are only defined for some
- * oeprations. For example, in a `LIST` op, only the `data` field is defined and
- * `sender` and `receiver` are empty. Some operations have no fields defined.
+ * operations. For example, in a `LIST` operation, only the `data` field is
+ * defined and `sender` and `receiver` are empty. Some operations have no fields
+ * defined.
  */
 
 #pragma once
@@ -78,41 +79,42 @@ class Callback;
 class Network
 {
 public:
-
     /**
      * Defines the possible operations defined by this wire protocol. Each
      * operation is annotated with what part of `Message` is defined when
      * `receiveOperation` is called.
-    */
+     */
     enum OpCode : uint32_t
     {
         // Server -> Client operations.
-        OK, // Contains data.
+        OK,    // Contains data.
         ERROR, // Contains data.
 
         // Client -> Server operations.
-        // Contains data.
         CREATE,  // Contains data
         DELETE,  // Contains data
         REQUEST, // Contains data
 
         // Bi-directional operations.
         SEND, // Contains data, sender, receiver
-        LIST,
+        LIST, // Contains data
 
         // Server -> Server operations.
-        LEADER, // Contains data
+        LEADER,   // Contains data
         IDENTIFY, // Contains data
-        SYNC, // Contains data
-        TIME, // Contains data
+        SYNC,     // Contains data
+        TIME,     // Contains data
 
         // Other
         UNSUPPORTED_OP,
-        NO_RETURN
+        NO_RETURN,
     };
 
     const std::unordered_set<OpCode> serverOperations = {
-        LEADER, IDENTIFY, SYNC, TIME
+        LEADER,
+        IDENTIFY,
+        SYNC,
+        TIME,
     };
 
     /**
@@ -131,8 +133,8 @@ public:
 
     /**
      * Waits for an operation to be received from `socket`. Triggers the
-     * registered callback for that operation with the appropriate data recieved
-     * from from the connection.
+     * registered callback for that operation with the appropriate data received
+     * from the connection.
      *
      * @return  Socket read() errors.
      *          Errors returned by the callback.
@@ -162,16 +164,15 @@ public:
 
     /**
      * Whether or not to drop responses originating from a server.
-    */
+     */
     bool dropServerResponses = false;
 
     /**
      * Whether or not to mark messages as originating from a server.
-    */
+     */
     bool isServer = false;
 
 private:
-
     /**
      * Header for any data sent between the server and client.
      */
@@ -181,14 +182,14 @@ private:
         uint32_t version;
         // The requested/received operation.
         OpCode operation;
-        // Length of the username of the sender. 0 if unused.
+        // Length of the username of the sender (0 if unused).
         uint64_t senderLength;
-        // Length of the username of the receiver. 0 if unused.
+        // Length of the username of the receiver (0 if unused).
         uint64_t receiverLength;
         // Length of the data following this metadata header
-        // (not including the sender/recvier information).
+        // (not including the sender/receiver information).
         uint64_t dataLength;
-        // If this message originate from a server.
+        // If this message originates from a server.
         bool isServer;
     };
 
@@ -200,23 +201,21 @@ private:
 
 /**
  * Common wrapper class for `Server` and `Client` member functions.
-*/
+ */
 class Callback
 {
 public:
+    Callback(Server *instance, Network::Message (Server::*func)(Network::Message));
 
-    Callback(Server* instance, Network::Message (Server::*func)(Network::Message));
-
-    Callback(Client* instance, Network::Message (Client::*func)(Network::Message));
+    Callback(Client *instance, Network::Message (Client::*func)(Network::Message));
 
     Network::Message operator()(Network::Message message);
 
 private:
-
     bool isClientCallback;
     Network::Message (Server::*serverCallback)(Network::Message);
     Network::Message (Client::*clientCallback)(Network::Message);
 
-    Client* client;
-    Server* server;
+    Client *client;
+    Server *server;
 };

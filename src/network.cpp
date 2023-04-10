@@ -12,18 +12,18 @@
 int Network::receiveOperation(int socket)
 {
     int err;
-    Metadata header {};
+    Metadata header{};
 
-    // Read header from the socet.
+    // Read header from the socket.
     err = read(socket, &header, sizeof(Metadata));
     if (err <= 0)
     {
-        return (err == 0)? -1 : err;
+        return (err == 0) ? -1 : err;
     }
 
     // Version checking works to both ensure that the network protocols are in
-    // agreement as well make sure that the wire protocol is being followed at
-    // all.
+    // agreement as well as make sure that the wire protocol is being followed
+    // at all.
     if (header.version != VERSION)
     {
         sendError(socket, "Incompatible protocol version.");
@@ -61,7 +61,7 @@ int Network::receiveOperation(int socket)
         dataIndex += err;
     }
 
-    // Construct Message object
+    // Construct Message object.
     Message message = {
         header.operation,
         data,
@@ -70,7 +70,7 @@ int Network::receiveOperation(int socket)
     };
     Message output;
 
-    // Message originated from server, and we don't care about those.
+    // Message originated from server, and we do not care about those.
     if (header.isServer && dropServerResponses &&
         serverOperations.find(message.operation) == serverOperations.end())
     {
@@ -87,7 +87,7 @@ int Network::receiveOperation(int socket)
             err = sendMessage(socket, output);
         }
     }
-    // Otherwise return an unsupported operation message.
+    // Otherwise, return an unsupported operation message.
     else
     {
         Message unsupportedOp = {UNSUPPORTED_OP};
@@ -99,40 +99,43 @@ int Network::receiveOperation(int socket)
 
 int Network::sendMessage(int socket, Message message)
 {
-    // Setup protocol header.
+    // Set up protocol header.
     Metadata header = {
         VERSION,
         message.operation,
         message.sender.size(),
         message.receiver.size(),
         message.data.size(),
-        isServer
+        isServer,
     };
 
     int err;
-    
+
     // Send header.
     err = send(socket, &header, sizeof(Metadata), MSG_HAVEMORE);
     if (err < 0)
     {
         return err;
     }
+
     // Send sender information.
-    char* senderData = message.sender.data();
+    char *senderData = message.sender.data();
     err = send(socket, senderData, message.sender.size(), MSG_HAVEMORE);
     if (err < 0)
     {
         return err;
     }
+
     // Send receiver information.
-    char* receiverData = message.receiver.data();
+    char *receiverData = message.receiver.data();
     err = send(socket, receiverData, message.receiver.size(), MSG_HAVEMORE);
     if (err < 0)
     {
         return err;
     }
+
     // Send the rest of the data.
-    char* data = message.data.data();
+    char *data = message.data.data();
     int bytesSent = 0;
     while (bytesSent < message.data.size())
     {
@@ -151,7 +154,7 @@ int Network::sendError(int socket, std::string errorMsg)
 {
     Message message = {
         ERROR,
-        errorMsg
+        errorMsg,
     };
 
     return sendMessage(socket, message);
