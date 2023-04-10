@@ -2,7 +2,7 @@
 
 ## Build Information
 
-This project uses CMake to generate build files. All you need is cmake, make (or your build system of choice), and a working c++ compiler.
+This project uses CMake to generate build files. All you need is `cmake`, `make` (or your build system of choice), `sqlite3`, and a working `c++` compiler.
 
 Execute the following commands to compile the system:
 
@@ -18,9 +18,9 @@ make test   # To compile the unit tests
 Execute the following commands to run the files:
 
 ```
-./server # To run the server
-./client # To run the client
-./test   # To run the unit tests
+./server <server.cfg> <server_num> # To run the server
+./client <server.cfg>              # To run the client
+./test                             # To run the unit tests
 ```
 
 The following commands are available to the client:

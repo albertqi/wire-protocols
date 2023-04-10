@@ -1,13 +1,13 @@
 #include "network.hpp"
 
-Callback::Callback(Server* instance, Network::Message (Server::*func)(Network::Message))
+Callback::Callback(Server *instance, Network::Message (Server::*func)(Network::Message))
 {
     isClientCallback = false;
     serverCallback = func;
     server = instance;
 }
 
-Callback::Callback(Client* instance, Network::Message (Client::*func)(Network::Message))
+Callback::Callback(Client *instance, Network::Message (Client::*func)(Network::Message))
 {
     isClientCallback = true;
     clientCallback = func;

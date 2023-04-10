@@ -1,10 +1,6 @@
 #include "server.hpp"
 #include "client.hpp"
 #include <iostream>
-#include <string>
-#include <thread>
-#include <vector>
-#include <mutex>
 #include <regex>
 #include <chrono>
 
@@ -32,7 +28,7 @@ bool operator==(const Network::Message a, const Network::Message b)
 
 void testServer(Server &server, Client &client)
 {
-    // Test `createAccount`
+    // Test `createAccount`.
     test(server.createAccount({Network::CREATE, ""}) ==
          (Network::Message){Network::ERROR, "No username provided", "", ""},
          "createAccount empty");
@@ -49,7 +45,7 @@ void testServer(Server &server, Client &client)
          (Network::Message){Network::ERROR, "User already exists", "", ""},
          "createAccount duplicate");
 
-    // Test `deleteAccount`
+    // Test `deleteAccount`.
     test(server.deleteAccount({Network::DELETE, ""}) ==
          (Network::Message){Network::ERROR, "User does not exist", "", ""},
          "deleteAccount empty");
@@ -60,7 +56,7 @@ void testServer(Server &server, Client &client)
          (Network::Message){Network::ERROR, "User does not exist", "", ""},
          "deleteAccount no user");
 
-    // Test `listAccounts`
+    // Test `listAccounts`.
     test(server.listAccounts({Network::LIST, "123"}) ==
          (Network::Message){Network::LIST, "123abcdef456\n", "", ""},
          "listAccounts substring one");
@@ -74,7 +70,7 @@ void testServer(Server &server, Client &client)
          (Network::Message){Network::LIST, "abcdef\n123abcdef456\n", "", ""},
          "listAccounts all");
 
-    // Test `sendMessage`
+    // Test `sendMessage`.
     test(server.sendMessage({Network::SEND,
          "hello", "abcdef", "123abcdef456"}) ==
          (Network::Message){Network::OK, "", "", ""},
@@ -84,7 +80,7 @@ void testServer(Server &server, Client &client)
          (Network::Message){Network::OK, "", "", ""},
          "sendMessage long");
 
-    // Test `requestMessages`
+    // Test `requestMessages`.
     test(server.requestMessages({Network::REQUEST, ""}) ==
          (Network::Message){Network::SEND, "", "", ""},
          "requestMessages no user");
@@ -101,10 +97,10 @@ void testServer(Server &server, Client &client)
 
 void testClient(Server &server, Client &client)
 {
-    // Test `clientRunning`
+    // Test `clientRunning`.
     test(client.clientRunning, "clientRunning");
 
-    // Test `createAccount`
+    // Test `createAccount`.
     test(client.createAccount("") == "No username provided",
          "createAccount empty");
     test(client.createAccount("user") == "Created account user",
@@ -117,7 +113,7 @@ void testClient(Server &server, Client &client)
     test(client.createAccount("user") == "User already exists",
          "createAccount duplicate");
 
-    // Test `deleteAccount`
+    // Test `deleteAccount`.
     test(client.deleteAccount("") == "User does not exist",
          "deleteAccount empty");
     test(client.deleteAccount("123user456user789") ==
@@ -126,7 +122,7 @@ void testClient(Server &server, Client &client)
     test(client.deleteAccount("123user456user789") == "User does not exist",
          "deleteAccount no user");
 
-    // Test `getAccountList`
+    // Test `getAccountList`.
     test(client.getAccountList("user123") == "user123\n",
          "getAccountList substring one");
     test(client.getAccountList("user") == "user\nuser123\n",
@@ -136,7 +132,7 @@ void testClient(Server &server, Client &client)
     test(client.getAccountList("") == "abcdef\n123abcdef456\nuser\nuser123\n",
          "getAccountList all");
 
-    // Test `getClientUserList`
+    // Test `getClientUserList`.
     test(client.getClientUserList().size() == 4,
          "getClientUserList size");
     test(client.getClientUserList().find("user") !=
@@ -146,14 +142,14 @@ void testClient(Server &server, Client &client)
          client.getClientUserList().end(),
          "getClientUserList not contains user");
 
-    // Test `getCurrentUser` and `setCurrentUser`
+    // Test `getCurrentUser` and `setCurrentUser`.
     test(client.getCurrentUser() == "",
          "getCurrentUser no user");
     client.setCurrentUser("user123");
     test(client.getCurrentUser() == "user123",
          "getCurrentUser simple");
 
-    // Test `handleCreateResponse`
+    // Test `handleCreateResponse`.
     test(client.handleCreateResponse({Network::CREATE, "testing", "", ""}) ==
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "handleCreateResponse simple");
@@ -166,7 +162,7 @@ void testClient(Server &server, Client &client)
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "handleCreateResponse long");
 
-    // Test `handleDelete`
+    // Test `handleDelete`.
     test(client.handleDelete({Network::DELETE, "testing", "", ""}) ==
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "handleDelete simple");
@@ -178,7 +174,7 @@ void testClient(Server &server, Client &client)
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "handleDelete long");
 
-    // Test `handleList`
+    // Test `handleList`.
     test(client.handleList({Network::LIST, "testing\n", "", ""}) ==
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "handleList simple");
@@ -190,7 +186,7 @@ void testClient(Server &server, Client &client)
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "handleList long");
 
-    // Test `handleReceive`
+    // Test `handleReceive`.
     test(client.handleReceive({Network::SEND, "testing: hello\n", "", ""}) ==
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "handleReceive simple");
@@ -203,7 +199,7 @@ void testClient(Server &server, Client &client)
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "handleReceive long");
 
-    // Test `messageCallback`
+    // Test `messageCallback`.
     test(client.messageCallback({Network::OK, "", "", ""}) ==
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "messageCallback ok");
@@ -212,7 +208,7 @@ void testClient(Server &server, Client &client)
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "messageCallback error");
 
-    // Test `sendMessage`
+    // Test `sendMessage`.
     test(client.sendMessage({Network::SEND, "hello", "user123", "user"}) == "",
          "sendMessage simple");
     test(client.sendMessage({Network::SEND,
@@ -222,46 +218,46 @@ void testClient(Server &server, Client &client)
 
 int main()
 {
-    // Remove existing databases
+    // Remove existing databases.
     std::remove("server_3000.db");
     std::remove("server_3001.db");
     std::remove("server_3002.db");
 
-    // Create list of servers
+    // Create list of servers.
     std::vector<std::pair<std::string, int>> serverList{{"127.0.0.1", 3000}, {"127.0.0.1", 3001}, {"127.0.0.1", 3002}};
 
-    // Create list of replicas for each server
+    // Create list of replicas for each server.
     std::vector<std::pair<std::string, int>> replicas0{{"127.0.0.1", 3001}, {"127.0.0.1", 3002}};
     std::vector<std::pair<std::string, int>> replicas1{{"127.0.0.1", 3000}, {"127.0.0.1", 3002}};
     std::vector<std::pair<std::string, int>> replicas2{{"127.0.0.1", 3000}, {"127.0.0.1", 3001}};
 
-    // Create pointers to server objects
+    // Create pointers to server objects.
     Server *server0, *server1, *server2;
 
-    // Run initial tests
+    // Run initial tests.
     std::cerr << "\nRUNNING INITIAL TESTS..." << std::endl;
     std::thread t0([&replicas0, &server0]()
     {
         server0 = new Server(3000, 0, replicas0);
         m.lock();
-        for (int i = 0; i < 2; i++)
-          test((*server0).acceptClient() == 0, "initalServerConnect server0");
+        for (int i = 0; i < 2; ++i)
+            test(server0->acceptClient() == 0, "initalServerConnect server0");
         m.unlock();
     });
     std::thread t1([&replicas1, &server1]()
     {
         server1 = new Server(3001, 1, replicas1);
         m.lock();
-        for (int i = 0; i < 2; i++)
-          test((*server1).acceptClient() == 0, "initalServerConnect server1");
+        for (int i = 0; i < 2; ++i)
+            test(server1->acceptClient() == 0, "initalServerConnect server1");
         m.unlock();
     });
     std::thread t2([&replicas2, &server2]()
     {
         server2 = new Server(3002, 2, replicas2);
         m.lock();
-        for (int i = 0; i < 2; i++)
-          test((*server2).acceptClient() == 0, "initalServerConnect server2");
+        for (int i = 0; i < 2; ++i)
+            test(server2->acceptClient() == 0, "initalServerConnect server2");
         m.unlock();
     });
 
@@ -269,7 +265,7 @@ int main()
     t1.join();
     t2.join();
 
-    // Setup databases for each server.
+    // Set up databases for each server.
     std::thread syncT0([&server0]()
     {
         test(server0->syncDatabases(3000) == 0, "syncDatabases server0");
@@ -282,51 +278,51 @@ int main()
     {
         test(server2->syncDatabases(3002) == 0, "syncDatabases server2");
     });
+
     std::this_thread::sleep_for(100ms);
 
-    // Join the threads
-    
+    // Join the threads.
     syncT0.join();
     syncT1.join();
     syncT2.join();
 
-     std::thread t4([&replicas0, &server0]()
-     {
-          m.lock();
-          test((*server0).acceptClient() == 0, "acceptClient server0");
-          m.unlock();
-     });
+    std::thread t4([&replicas0, &server0]()
+    {
+        m.lock();
+        test(server0->acceptClient() == 0, "acceptClient server0");
+        m.unlock();
+    });
 
-     // Create client object
+    // Create client object.
     Client client(serverList);
 
     t4.join();
 
-    // Run server tests
+    // Run server tests.
     std::cerr << "\nRUNNING SERVER TESTS..." << std::endl;
     testServer(*server0, client);
 
-    // Run client tests
+    // Run client tests.
     std::cerr << "\nRUNNING CLIENT TESTS..." << std::endl;
     testClient(*server0, client);
 
-    // Clean up client
+    // Clean up client.
     client.stopClient();
 
-    // Run final tests
+    // Run final tests.
     std::cerr << "\nRUNNING FINAL TESTS..." << std::endl;
     test(!client.clientRunning, "clientRunning stopped");
 
-    // Clean up servers
-    (*server0).stopServer();
-    (*server1).stopServer();
-    (*server2).stopServer();
+    // Clean up servers.
+    server0->stopServer();
+    server1->stopServer();
+    server2->stopServer();
 
     delete server0;
     delete server1;
     delete server2;
 
-    // Print results
+    // Print results.
     std::string msg = allTestsPassed ? "\nALL TESTS PASSED :)\n" :
                                        "\nSOME TESTS FAILED :(\n";
     std::cerr << msg << std::endl;
