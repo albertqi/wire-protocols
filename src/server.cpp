@@ -177,7 +177,11 @@ int Server::syncDatabases(int port)
         }
         else
         {
-            db_cv.wait(lock);
+            while (dbSyncedStr.empty())
+            {
+                // Wait for database to be synced.
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            }
 
             // Convert string into database.
             std::ofstream output(dbName, std::ios::binary);
