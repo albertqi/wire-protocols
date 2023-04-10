@@ -3,3 +3,4 @@
 
 # build artifacts
 build/
+*.db
