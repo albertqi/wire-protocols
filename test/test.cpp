@@ -4,10 +4,13 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <mutex>
+#include <regex>
 
 #define PADDED_LENGTH 50
 
 bool allTestsPassed = true;
+std::mutex m;
 
 void test(bool b, std::string msg)
 {
@@ -59,13 +62,13 @@ void testServer(Server &server, Client &client)
          (Network::Message){Network::LIST, "123abcdef456\n", "", ""},
          "listAccounts substring one");
     test(server.listAccounts({Network::LIST, "abcdef"}) ==
-         (Network::Message){Network::LIST, "123abcdef456\nabcdef\n", "", ""},
+         (Network::Message){Network::LIST, "abcdef\n123abcdef456\n", "", ""},
          "listAccounts substring both");
     test(server.listAccounts({Network::LIST, "abc123"}) ==
          (Network::Message){Network::LIST, "", "", ""},
          "listAccounts substring none");
     test(server.listAccounts({Network::LIST, ""}) ==
-         (Network::Message){Network::LIST, "123abcdef456\nabcdef\n", "", ""},
+         (Network::Message){Network::LIST, "abcdef\n123abcdef456\n", "", ""},
          "listAccounts all");
 
     // Test `sendMessage`
@@ -85,9 +88,8 @@ void testServer(Server &server, Client &client)
     test(server.requestMessages({Network::REQUEST, "abcdef"}) ==
          (Network::Message){Network::SEND, "", "", ""},
          "requestMessages empty");
-    test(server.requestMessages({Network::REQUEST, "123abcdef456"}) ==
-         (Network::Message){Network::SEND,
-         "abcdef: hello\nabcdef: the quick brown fox jumps over the lazy dog\n", "", ""},
+    test(std::regex_match(server.requestMessages({Network::REQUEST, "123abcdef456"}).data, 
+         std::regex("\\[.*\\] abcdef: hello\n\\[.*\\] abcdef: the quick brown fox jumps over the lazy dog\n")),
          "requestMessages multiple");
     test(server.requestMessages({Network::REQUEST, "123abcdef456"}) ==
          (Network::Message){Network::SEND, "", "", ""},
@@ -124,11 +126,11 @@ void testClient(Server &server, Client &client)
     // Test `getAccountList`
     test(client.getAccountList("user123") == "user123\n",
          "getAccountList substring one");
-    test(client.getAccountList("user") == "user123\nuser\n",
+    test(client.getAccountList("user") == "user\nuser123\n",
          "getAccountList substring both");
     test(client.getAccountList("123user") == "",
          "getAccountList substring none");
-    test(client.getAccountList("") == "user123\nuser\n123abcdef456\nabcdef\n",
+    test(client.getAccountList("") == "abcdef\n123abcdef456\nuser\nuser123\n",
          "getAccountList all");
 
     // Test `getClientUserList`
@@ -222,39 +224,82 @@ void testClient(Server &server, Client &client)
 
 int main()
 {
-    std::vector<std::pair<std::string, int>> serverList{{"127.0.0.1:3000", 0}, {"127.0.0.1:3001", 1}, {"127.0.0.1:3002", 2}};
+    // Remove existing databases
+    std::remove("server_3000.db");
+    std::remove("server_3001.db");
+    std::remove("server_3002.db");
 
-    std::vector<std::pair<std::string, int>> replicas0{{"127.0.0.1:3001", 1}, {"127.0.0.1:3002", 2}};
-    std::vector<std::pair<std::string, int>> replicas1{{"127.0.0.1:3000", 0}, {"127.0.0.1:3002", 2}};
-    std::vector<std::pair<std::string, int>> replicas2{{"127.0.0.1:3000", 0}, {"127.0.0.1:3001", 1}};
+    // Create list of servers
+    std::vector<std::pair<std::string, int>> serverList{{"127.0.0.1", 3000}, {"127.0.0.1", 3001}, {"127.0.0.1", 3002}};
 
-    Server server0(3000, 0, replicas0);
-    Server server1(3001, 1, replicas1);
-    Server server2(3002, 2, replicas2);
+    // Create list of replicas for each server
+    std::vector<std::pair<std::string, int>> replicas0{{"127.0.0.1", 3001}, {"127.0.0.1", 3002}};
+    std::vector<std::pair<std::string, int>> replicas1{{"127.0.0.1", 3000}, {"127.0.0.1", 3002}};
+    std::vector<std::pair<std::string, int>> replicas2{{"127.0.0.1", 3000}, {"127.0.0.1", 3001}};
 
+    // Create pointers to server objects
+    Server *server0, *server1, *server2;
+
+    // Run initial tests
     std::cerr << "\nRUNNING INITIAL TESTS..." << std::endl;
-    std::thread t([&server0]()
+    std::thread t0([&replicas0, &server0]()
     {
-        test(server0.acceptClient() == 0, "acceptClient");
+        server0 = new Server(3000, 0, replicas0);
+        m.lock();
+        test((*server0).acceptClient() == 0, "acceptClient server0");
+        m.unlock();
+    });
+    std::thread t1([&replicas1, &server1]()
+    {
+        server1 = new Server(3001, 1, replicas1);
+        m.lock();
+        test((*server1).acceptClient() == 0, "acceptClient server1");
+        m.unlock();
+    });
+    std::thread t2([&replicas2, &server2]()
+    {
+        server2 = new Server(3002, 2, replicas2);
+        m.lock();
+        test((*server2).acceptClient() == 0, "acceptClient server2");
+        m.unlock();
     });
 
+    // Create client object
     Client client(serverList);
-    t.join();
 
+    // Join server threads
+    t0.join();
+    t1.join();
+    t2.join();
+
+    // Run server tests
     std::cerr << "\nRUNNING SERVER TESTS..." << std::endl;
-    testServer(server0, client);
+    testServer(*server0, client);
 
+    // Run client tests
     std::cerr << "\nRUNNING CLIENT TESTS..." << std::endl;
-    testClient(server0, client);
+    testClient(*server0, client);
 
+    // Clean up client
     client.stopClient();
 
+    // Run final tests
     std::cerr << "\nRUNNING FINAL TESTS..." << std::endl;
     test(!client.clientRunning, "clientRunning stopped");
 
-    server0.stopServer();
+    // Clean up servers
+    (*server0).stopServer();
+    (*server1).stopServer();
+    (*server2).stopServer();
 
+    delete server0;
+    delete server1;
+    delete server2;
+
+    // Print results
     std::string msg = allTestsPassed ? "\nALL TESTS PASSED :)\n" :
                                        "\nSOME TESTS FAILED :(\n";
     std::cerr << msg << std::endl;
+
+    return 0;
 }
