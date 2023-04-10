@@ -16,7 +16,7 @@ Client::Client(std::vector<std::pair<std::string, int>> serverList)
     // Connect to the server.
     clientFd = -1;
     connectToServer(serverList);
-    
+
     // Register callbacks.
     network.registerCallback(Network::OK, Callback(this, &Client::messageCallback));
     network.registerCallback(Network::CREATE, Callback(this, &Client::handleCreateResponse));
