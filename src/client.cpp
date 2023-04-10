@@ -1,11 +1,9 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <string.h>
-#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <iostream>
-#include <thread>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -19,7 +17,7 @@ Client::Client(std::vector<std::pair<std::string, int>> serverList)
     clientFd = -1;
     connectToServer(serverList);
     
-    // Register callbacks
+    // Register callbacks.
     network.registerCallback(Network::OK, Callback(this, &Client::messageCallback));
     network.registerCallback(Network::CREATE, Callback(this, &Client::handleCreateResponse));
     network.registerCallback(Network::DELETE, Callback(this, &Client::handleDelete));

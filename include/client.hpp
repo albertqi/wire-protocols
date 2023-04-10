@@ -1,6 +1,6 @@
 /**
- * `Client` handles the client-server communication and maintians the current
- * state of a particular client (i.e., logging in and chanigng accounts). This
+ * `Client` handles the client-server communication and maintains the current
+ * state of a particular client (i.e., logging in and changing accounts). This
  * class uses the `Network` class to handle the data link layer and registers
  * callbacks for messages received from the server.
  */
@@ -37,12 +37,12 @@ public:
     std::string deleteAccount(std::string username);
 
     /**
-     * Sends the message specified in message to a recepient.
+     * Sends the message specified in message to a recipient.
      */
     std::string sendMessage(Network::Message message);
 
     /**
-     * Retreives the next message for the currently logged in user. Returns
+     * Retrieves the next message for the currently logged in user. Returns
      * an empty string if there are no messages to receive.
      */
     std::string requestMessages();
@@ -105,7 +105,7 @@ private:
     Network network;
 
     /**
-     * Client socket that is connectedto the server.
+     * Client socket that is connected to the server.
      */
     int clientFd;
 
@@ -117,10 +117,16 @@ private:
     std::condition_variable cv;
 
     /**
-     * Message return lock and condition_variable
+     * Message return lock and condition variable.
      */
     std::mutex message_m;
     std::condition_variable message_cv;
+
+    /**
+     * Server list and lock.
+     */
+    std::mutex connection_m;
+    std::vector<std::pair<std::string, int>> serverList;
 
     /**
      * The currently logged in user.
@@ -133,7 +139,7 @@ private:
     std::unordered_set<std::string> clientUserList;
 
     /**
-     * Return values from callbacks
+     * Return values from callbacks.
      */
     std::string opResult;
     std::string opResultMessages;
@@ -142,9 +148,6 @@ private:
      * Network `receiveOperation()` thread.
      */
     std::thread opThread;
-
-    std::mutex connection_m;
-    std::vector<std::pair<std::string, int>> serverList;
 
     /**
      * Connects to a server in the server list.

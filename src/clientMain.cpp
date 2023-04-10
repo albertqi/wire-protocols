@@ -3,9 +3,6 @@
 #include <iostream>
 #include <filesystem>
 #include <fstream>
-#include <string>
-#include <thread>
-#include <vector>
 
 #include "client.hpp"
 
@@ -48,6 +45,7 @@ int main(int argc, char const *argv[])
 
     Client client(serverList);
 
+    // Get messages in a separate thread.
     std::thread msg_thread([&client]()
     {
         while (client.clientRunning)
@@ -58,10 +56,11 @@ int main(int argc, char const *argv[])
             {
                 continue;
             }
-            std::cout << "\nYou have received mail :)\n" << messages << std::endl;
+            std::cout << "\n\nYou have received mail :)\n" << messages << std::endl;
         }
     });
 
+    // Primary loop for user input.
     std::string buffer;
     while (client.clientRunning)
     {
