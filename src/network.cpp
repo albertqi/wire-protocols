@@ -48,10 +48,15 @@ int Network::receiveOperation(int socket)
 
     // Read operation data.
     std::string data(header.dataLength, 0);
-    err = read(socket, &data[0], header.dataLength);
-    if (err < 0)
+    int bytesRead = 0;
+    while (bytesRead < header.dataLength)
     {
-        return err;
+        err = read(socket, &data[0], header.dataLength);
+        if (err < 0)
+        {
+            return err;
+        }
+        bytesRead += err;
     }
 
     // Construct Message object
