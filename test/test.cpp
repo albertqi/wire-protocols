@@ -6,8 +6,11 @@
 #include <vector>
 #include <mutex>
 #include <regex>
+#include <chrono>
 
 #define PADDED_LENGTH 50
+
+using namespace std::literals::chrono_literals;
 
 bool allTestsPassed = true;
 std::mutex m;
@@ -241,31 +244,63 @@ int main()
     {
         server0 = new Server(3000, 0, replicas0);
         m.lock();
-        test((*server0).acceptClient() == 0, "acceptClient server0");
+        for (int i = 0; i < 2; i++)
+          test((*server0).acceptClient() == 0, "initalServerConnect server0");
         m.unlock();
     });
     std::thread t1([&replicas1, &server1]()
     {
         server1 = new Server(3001, 1, replicas1);
         m.lock();
-        test((*server1).acceptClient() == 0, "acceptClient server1");
+        for (int i = 0; i < 2; i++)
+          test((*server1).acceptClient() == 0, "initalServerConnect server1");
         m.unlock();
     });
     std::thread t2([&replicas2, &server2]()
     {
         server2 = new Server(3002, 2, replicas2);
         m.lock();
-        test((*server2).acceptClient() == 0, "acceptClient server2");
+        for (int i = 0; i < 2; i++)
+          test((*server2).acceptClient() == 0, "initalServerConnect server2");
         m.unlock();
     });
 
-    // Create client object
-    Client client(serverList);
-
-    // Join server threads
     t0.join();
     t1.join();
     t2.join();
+
+    // Setup databases for each server.
+    std::thread syncT0([&server0]()
+    {
+        test(server0->syncDatabases(3000) == 0, "syncDatabases server0");
+    });
+    std::thread syncT1([&server1]()
+    {
+        test(server1->syncDatabases(3001) == 0, "syncDatabases server1");
+    });
+    std::thread syncT2([&server2]()
+    {
+        test(server2->syncDatabases(3002) == 0, "syncDatabases server2");
+    });
+    std::this_thread::sleep_for(100ms);
+
+    // Join the threads
+    
+    syncT0.join();
+    syncT1.join();
+    syncT2.join();
+
+     std::thread t4([&replicas0, &server0]()
+     {
+          m.lock();
+          test((*server0).acceptClient() == 0, "acceptClient server0");
+          m.unlock();
+     });
+
+     // Create client object
+    Client client(serverList);
+
+    t4.join();
 
     // Run server tests
     std::cerr << "\nRUNNING SERVER TESTS..." << std::endl;
