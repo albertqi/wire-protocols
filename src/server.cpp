@@ -109,6 +109,11 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     serverRunning = true;
 }
 
+Server::~Server()
+{
+    stopServer();
+}
+
 void Server::stopServer()
 {
     sqlite3_close(db);
@@ -125,19 +130,21 @@ int Server::syncDatabases(int port)
     if (std::filesystem::exists(dbName))
     {
         auto lastWriteTime = std::filesystem::last_write_time(dbName);
-        msgData = std::to_string(std::chrono::duration_cast<std::chrono::nanoseconds>(lastWriteTime.time_since_epoch()).count());
+        msgData = std::to_string((size_t) std::chrono::duration_cast<std::chrono::milliseconds>(lastWriteTime.time_since_epoch()).count());
+        std::cout << "last write time: " << msgData << "\n";
     }
 
     // Send last modified time to replicas.
-    for (auto i = replicas.begin(); i != replicas.end(); ++i)
+    for (auto socket : replicas)
     {
-        int socket = *i;
+        std::cout << "Sending time msgs\n";
         if (network.sendMessage(socket, {Network::TIME, msgData}) < 0)
         {
             return -1;
         }
     }
     
+    std::cout << "Waiting for time msgs from other servers\n";
     while (dbModifiedTimes.size() != replicas.size())
     {
         // Wait for all replicas to respond.
@@ -145,30 +152,34 @@ int Server::syncDatabases(int port)
     }
 
     // Find last modified time of most recent database.
-    long long modifiedTime = std::stoll(msgData);
-    long long mostRecentTime = modifiedTime;
-    for (const auto& time : dbModifiedTimes)
+    size_t modifiedTime = std::stoull(msgData);
+    size_t mostRecentTime = modifiedTime;
+    for (auto time : dbModifiedTimes)
     {
-        if (std::stoll(time) > mostRecentTime)
+        if (time > mostRecentTime)
         {
-            mostRecentTime = std::stoll(time);
+            mostRecentTime = time;
         }
     }
+    for (auto i : dbModifiedTimes)
+    {
+        std::cout << i << " ";
+    }
+    std::cout << "\n";
 
     // Check if at least one replica with a database.
     if (mostRecentTime != 0) {
         // Check if we need to sync.
         if (modifiedTime == mostRecentTime)
         {
+            std::cout << "Serializing database\n";
             // Convert database into string.
             std::ifstream input(dbName, std::ios::binary);
             std::string dbStr((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-            input.close();
             
             // Send database to replicas.
-            for (auto i = replicas.begin(); i != replicas.end(); ++i)
+            for (auto socket : replicas)
             {
-                int socket = *i;
                 if (network.sendMessage(socket, {Network::SYNC, dbStr}) < 0)
                 {
                     return -1;
@@ -177,6 +188,7 @@ int Server::syncDatabases(int port)
         }
         else
         {
+            std::cout << "Waiting for database sync\n";
             while (dbSyncedStr.empty())
             {
                 // Wait for database to be synced.
@@ -184,12 +196,12 @@ int Server::syncDatabases(int port)
             }
 
             // Convert string into database.
-            std::ofstream output(dbName, std::ios::binary);
+            std::ofstream output(dbName, std::ios::binary | std::ios::trunc);
             output << dbSyncedStr;
-            output.close();
         }
     }
 
+    std::cout << "Opening databse file\n";
     // Open database.
     int r = sqlite3_open(dbName.c_str(), &db);
     if (r != SQLITE_OK)
@@ -227,12 +239,15 @@ int Server::syncDatabases(int port)
 
 Network::Message Server::handleTime(Network::Message message)
 {
-    dbModifiedTimes.push_back(message.data);
+    std::unique_lock lk(dbSync_m);
+    std::cout << "Recv'd time msg\n";
+    dbModifiedTimes.push_back(std::stoull(message.data));
     return {Network::NO_RETURN};
 }
 
 Network::Message Server::handleSync(Network::Message message)
 {
+    std::cout << "Recv'd syncd database";
     dbSyncedStr = message.data;
     db_cv.notify_all();
     return {Network::NO_RETURN};
@@ -241,6 +256,7 @@ Network::Message Server::handleSync(Network::Message message)
 Network::Message Server::createAccount(Network::Message info)
 {
     doReplication(info);
+    std::unique_lock lock(db_m);
 
     std::string user = info.data;
     if (user.size() == 0)
@@ -286,6 +302,7 @@ Network::Message Server::createAccount(Network::Message info)
 
 Network::Message Server::listAccounts(Network::Message requester)
 {
+    std::unique_lock lock(db_m);
     std::string result;
 
     std::string substr = requester.data;
@@ -314,6 +331,7 @@ Network::Message Server::listAccounts(Network::Message requester)
 Network::Message Server::deleteAccount(Network::Message requester)
 {
     doReplication(requester);
+    std::unique_lock lock(db_m);
 
     std::string user = requester.data;
 
@@ -356,6 +374,7 @@ Network::Message Server::deleteAccount(Network::Message requester)
 Network::Message Server::sendMessage(Network::Message message)
 {
     doReplication(message);
+    std::unique_lock lock(db_m);
 
     std::string sender = message.sender, receiver = message.receiver;
     std::string messageText = message.data;
@@ -376,6 +395,7 @@ Network::Message Server::sendMessage(Network::Message message)
 Network::Message Server::requestMessages(Network::Message message)
 {
     doReplication(message);
+    std::unique_lock lock(db_m);
 
     std::string result;
 
