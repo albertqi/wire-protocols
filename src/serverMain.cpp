@@ -1,8 +1,7 @@
 #include <iostream>
 #include <filesystem>
 #include <fstream>
-#include <string>
-#include <vector>
+#include <thread>
 
 #include "server.hpp"
 
@@ -52,7 +51,7 @@ int main(int argc, char const *argv[])
         std::string server_ip = current_line.substr(0, colon_index);
         int server_port = std::stoi(current_line.substr(colon_index + 1, std::string::npos));
 
-        // If this instance is the current server listing, grab the port to bind to.
+        // If this instance is the current server listing, then grab the port to bind to.
         if (i == replica_number)
         {
             this_port = server_port;

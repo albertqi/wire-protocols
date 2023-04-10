@@ -14,7 +14,6 @@
 #include <mutex>
 #include <condition_variable>
 #include <string>
-#include <thread>
 #include <set>
 #include <vector>
 
@@ -29,7 +28,7 @@ public:
 
     ~Server();
 
-    ///////////////////// Server functions /////////////////////
+    ///////////////////// Server Functions /////////////////////
 
     /**
      * Accepts a client connection and spawns a thread to handle requests for
@@ -44,7 +43,12 @@ public:
      */
     void stopServer();
 
-    //////////////////// Business functions ////////////////////
+    /**
+     * Syncs the database of this replica with the other replicas.
+     */
+    int syncDatabases(int port);
+
+    //////////////////// Business Functions ////////////////////
 
     /**
      * Creates an account using the data in `info`.
@@ -63,9 +67,9 @@ public:
     Network::Message deleteAccount(Network::Message requester);
 
     /**
-     * Sends the message specified by `message` to a recepient. If the recepient
-     * is not currently logged in, the message is backlogged and delivered when
-     * they logged in.
+     * Sends the message specified by `message` to a recipient. If the recipient
+     * is not currently logged in, then the message is backlogged and delivered
+     * when they log in.
      */
     Network::Message sendMessage(Network::Message message);
 
@@ -73,8 +77,6 @@ public:
      * Returns the next message for the user specified in `requester`.
      */
     Network::Message requestMessages(Network::Message requester);
-
-    int syncDatabases(int port);
 
 private:
     /**
@@ -86,6 +88,11 @@ private:
      * The ID of this instance in relation to the other replicas.
      */
     int replicaId;
+
+    /**
+     * The ID of the leader replica.
+     */
+    int leaderId;
 
     /**
      * Flags whether this instance is the leader of the replicas.
@@ -112,10 +119,8 @@ private:
      */
     Network network;
 
-    int leaderId;
-
     /**
-     * List of currently acive replicas determined through the IDENTIFY protocol.
+     * List of currently active replicas determined through the IDENTIFY protocol.
      */
     std::mutex replicas_m;
     std::set<int> runningReplicas;
@@ -140,17 +145,33 @@ private:
     void doReplication(Network::Message message);
 
     /**
-     * 
+     * Performs the leader election protocol.
      */
     void doLeaderElection();
 
+    /**
+     * Performs the IDENTIFY protocol to determine which replicas are currently
+     * running.
+     */
     void discoverReplicas();
 
+    /**
+     * `LEADER` handler.
+     */
     Network::Message handleLeader(Network::Message id);
 
+    /**
+     * `IDENTIFY` handler.
+     */
     Network::Message handleIdentify(Network::Message id);
 
+    /**
+     * `TIME` handler.
+     */
     Network::Message handleTime(Network::Message message);
 
+    /**
+     * `SYNC` handler.
+     */
     Network::Message handleSync(Network::Message message);
 };

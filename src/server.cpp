@@ -1,14 +1,15 @@
-#include <algorithm>
-#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sqlite3.h>
+#include <algorithm>
+#include <iostream>
 #include <filesystem>
 #include <chrono>
 #include <fstream>
+#include <thread>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -23,15 +24,16 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     network.isServer = true;
     serverRunning = false;
 
-    // Initialize socket
+    // Initialize socket.
     serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (serverFd < 0)
     {
         perror("socket()");
         exit(1);
     }
-    // Enable SO_REUSEADDR so that we dont get bind() errors if the previous
-    // socket is stuck in TIME_WAIT or hasn't been released by the OS.
+
+    // Enable SO_REUSEADDR so that we do not get bind() errors if the previous
+    // socket is stuck in TIME_WAIT or has not been released by the OS.
     int enable = 1;
     if (setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
     {
@@ -131,20 +133,17 @@ int Server::syncDatabases(int port)
     {
         auto lastWriteTime = std::filesystem::last_write_time(dbName);
         msgData = std::to_string((size_t) std::chrono::duration_cast<std::chrono::milliseconds>(lastWriteTime.time_since_epoch()).count());
-        std::cout << "last write time: " << msgData << "\n";
     }
 
     // Send last modified time to replicas.
     for (auto socket : replicas)
     {
-        std::cout << "Sending time msgs\n";
         if (network.sendMessage(socket, {Network::TIME, msgData}) < 0)
         {
             return -1;
         }
     }
     
-    std::cout << "Waiting for time msgs from other servers\n";
     while (dbModifiedTimes.size() != replicas.size())
     {
         // Wait for all replicas to respond.
@@ -161,19 +160,15 @@ int Server::syncDatabases(int port)
             mostRecentTime = time;
         }
     }
-    for (auto i : dbModifiedTimes)
-    {
-        std::cout << i << " ";
-    }
-    std::cout << "\n";
 
-    // Check if at least one replica with a database.
+    // Check if there exists at least one replica with a database.
     if (mostRecentTime != 0) {
         // Check if we need to sync.
         if (modifiedTime == mostRecentTime)
         {
             std::cout << "Serializing database\n";
-            // Convert database into string.
+
+            // Convert database to string.
             std::ifstream input(dbName, std::ios::binary);
             std::string dbStr((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
             
@@ -189,19 +184,21 @@ int Server::syncDatabases(int port)
         else
         {
             std::cout << "Waiting for database sync\n";
+
             while (dbSyncedStr.empty())
             {
                 // Wait for database to be synced.
                 std::this_thread::sleep_for(std::chrono::milliseconds(250));
             }
 
-            // Convert string into database.
+            // Convert string to database.
             std::ofstream output(dbName, std::ios::binary | std::ios::trunc);
             output << dbSyncedStr;
         }
     }
 
-    std::cout << "Opening databse file\n";
+    std::cout << "Opening database file\n";
+
     // Open database.
     int r = sqlite3_open(dbName.c_str(), &db);
     if (r != SQLITE_OK)
@@ -240,14 +237,12 @@ int Server::syncDatabases(int port)
 Network::Message Server::handleTime(Network::Message message)
 {
     std::unique_lock lk(dbSync_m);
-    std::cout << "Recv'd time msg\n";
     dbModifiedTimes.push_back(std::stoull(message.data));
     return {Network::NO_RETURN};
 }
 
 Network::Message Server::handleSync(Network::Message message)
 {
-    std::cout << "Recv'd syncd database";
     dbSyncedStr = message.data;
     db_cv.notify_all();
     return {Network::NO_RETURN};
@@ -264,6 +259,7 @@ Network::Message Server::createAccount(Network::Message info)
         return {Network::ERROR, "No username provided"};
     }
 
+    // Find if user already exists.
     std::string existingUsers = "";
     std::string sql = std::string("SELECT username FROM users WHERE username = '") + user + "'";
 
@@ -289,6 +285,7 @@ Network::Message Server::createAccount(Network::Message info)
 
     std::cout << "Creating account: " << user << "\n";
 
+    // Insert user into database.
     sql = std::string("INSERT INTO users VALUES ('") + user + "')";
     r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
     if (r != SQLITE_OK)
@@ -305,6 +302,7 @@ Network::Message Server::listAccounts(Network::Message requester)
     std::unique_lock lock(db_m);
     std::string result;
 
+    // Find all users that match the substring.
     std::string substr = requester.data;
     std::string sql = std::string("SELECT username FROM users WHERE username LIKE '%") + substr + "%'";
 
@@ -335,6 +333,7 @@ Network::Message Server::deleteAccount(Network::Message requester)
 
     std::string user = requester.data;
 
+    // Find if user exists.
     std::string existingUsers = "";
     std::string sql = std::string("SELECT username FROM users WHERE username = '") + user + "'";
 
@@ -360,6 +359,7 @@ Network::Message Server::deleteAccount(Network::Message requester)
 
     std::cout << "Deleting account: " << user << "\n";
 
+    // Delete user from database.
     sql = std::string("DELETE FROM users WHERE username = '") + user + "'";
     r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
     if (r != SQLITE_OK)
@@ -376,6 +376,7 @@ Network::Message Server::sendMessage(Network::Message message)
     doReplication(message);
     std::unique_lock lock(db_m);
 
+    // Insert message into database.
     std::string sender = message.sender, receiver = message.receiver;
     std::string messageText = message.data;
 
@@ -405,6 +406,7 @@ Network::Message Server::requestMessages(Network::Message message)
         return {Network::SEND, ""};
     }
 
+    // Find all messages for the user.
     std::string sql = std::string("SELECT sender, message, timestamp FROM messages WHERE receiver = '") + user + "' ORDER BY timestamp";
 
     auto callback = [](void *data, int numCols, char **colData, char **colNames) -> int
@@ -428,6 +430,7 @@ Network::Message Server::requestMessages(Network::Message message)
         exit(1);
     }
 
+    // Delete all messages for the user.
     sql = std::string("DELETE FROM messages WHERE receiver = '") + user + "'";
     r = sqlite3_exec(db, sql.c_str(), NULL, NULL, NULL);
     if (r != SQLITE_OK)
@@ -466,7 +469,7 @@ Network::Message Server::handleIdentify(Network::Message message)
 
 void Server::discoverReplicas()
 {
-    // Send out id to other replicas. Identify ourselves as the leader if we are.
+    // Send out ID to other replicas. Identify ourselves as the leader if we are.
     Network::Message identifyMessage {Network::IDENTIFY, std::to_string(replicaId)};    
     if (isLeader)
     {
@@ -479,16 +482,16 @@ void Server::discoverReplicas()
         int ret = network.sendMessage(socket, identifyMessage);
         if (ret < 0)
         {
-            // Replica down.
+            // Replica is down.
             i = replicas.erase(i);
         }
         else
         {
-            i++;
+            ++i;
         }
     }
 
-    // Wait to receive ids from other replicas.
+    // Wait to receive IDs from other replicas.
     while (runningReplicas.size() < replicas.size())
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -496,14 +499,14 @@ void Server::discoverReplicas()
 
     if (runningReplicas.find(leaderId) == runningReplicas.end() && !isLeader)
     {
-        // Leader went down!
+        // Leader went down.
         doLeaderElection();
     }
 }
 
 void Server::doLeaderElection()
 {
-    std::cout << "Leader has gone down. Performing leader election" << std::endl;
+    std::cout << "Leader has gone down. Performing leader election." << std::endl;
     runningReplicas.insert(replicaId);
 
     int minId = *runningReplicas.begin();
@@ -523,7 +526,7 @@ void Server::doLeaderElection()
 
 void Server::doReplication(Network::Message message)
 {
-    // If we're not the leader, nothing to do.
+    // If we are not the leader, then there is nothing to do.
     if (!isLeader)
     {
         return;
@@ -536,12 +539,12 @@ void Server::doReplication(Network::Message message)
         int ret = network.sendMessage(socket, message);
         if (ret < 0)
         {
-            // Replica down.
+            // Replica is down.
             i = replicas.erase(i);
         }
         else
         {
-            i++;
+            ++i;
         }
     }
 }
@@ -561,7 +564,7 @@ int Server::acceptClient()
         return clientSocket;
     }
 
-    // Enable TCP KeepAlive to ensure we're notified if the leader goes down.
+    // Enable TCP KeepAlive to ensure that we are notified if the leader goes down.
     int enable = 1;
     if (setsockopt(clientSocket, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(int)) < 0)
     {
@@ -569,7 +572,7 @@ int Server::acceptClient()
         return -1;
     }
 
-    struct linger lo = { 1, 0 };
+    struct linger lo = {1, 0};
     if (setsockopt(clientSocket, SOL_SOCKET, SO_LINGER, &lo, sizeof(lo)) < 0)
     {
         perror("setsockopt()");
