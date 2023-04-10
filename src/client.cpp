@@ -16,6 +16,7 @@ Client::Client(std::vector<std::pair<std::string, int>> serverList)
     : serverList(serverList)
 {
     // Connect to the server.
+    clientFd = -1;
     connectToServer(serverList);
     
     // Register callbacks
@@ -57,7 +58,8 @@ int Client::connectToServer(std::vector<std::pair<std::string, int>> serverList)
     }
 
     // Close current socket before trying anything.
-    close(clientFd);
+    if (clientFd != 0)
+        close(clientFd);
 
     for (const auto &server : serverList)
     {

@@ -66,6 +66,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #define VERSION 1
 
@@ -108,6 +109,10 @@ public:
         // Other
         UNSUPPORTED_OP,
         NO_RETURN
+    };
+
+    const std::unordered_set<OpCode> serverOperations = {
+        LEADER, IDENTIFY, SYNC, TIME
     };
 
     /**
@@ -158,12 +163,12 @@ public:
     /**
      * Whether or not to drop responses originating from a server.
     */
-    bool dropServerResponses;
+    bool dropServerResponses = false;
 
     /**
      * Whether or not to mark messages as originating from a server.
     */
-    bool isServer;
+    bool isServer = false;
 
 private:
 
