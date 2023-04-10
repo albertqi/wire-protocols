@@ -205,7 +205,8 @@ std::string Client::requestMessages()
         connectToServer(serverList);
         return "";
     }
-    message_cv.wait(lock);
+    using namespace std::chrono_literals;
+    message_cv.wait_for(lock, 600ms);
     return opResultMessages;
 }
 
