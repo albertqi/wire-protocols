@@ -66,6 +66,8 @@ int main(int argc, char const *argv[])
 
     Server server(this_port, replica_number, replicas);
 
+    std::thread syncThread(&Server::syncDatabases, &server, this_port);
+
     while (true)
     {
         int err = server.acceptClient();
@@ -74,6 +76,8 @@ int main(int argc, char const *argv[])
             std::cerr << "Failed client connection" << std::endl;
         }
     }
+
+    syncThread.join();
 
     return 0;
 }
