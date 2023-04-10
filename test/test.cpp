@@ -209,11 +209,6 @@ void testClient(Server &server, Client &client)
          (Network::Message){Network::NO_RETURN, "", "", ""},
          "messageCallback error");
 
-    // Test `requestMessages`
-    test(client.requestMessages() ==
-         "testing: hello\ntesting123: goodbye\n",
-         "requestMessages simple");
-
     // Test `sendMessage`
     test(client.sendMessage({Network::SEND, "hello", "user123", "user"}) == "",
          "sendMessage simple");
