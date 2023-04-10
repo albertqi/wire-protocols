@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include <string>
 #include <thread>
 #include <set>
@@ -116,6 +117,13 @@ private:
     std::set<int> runningReplicas;
 
     /**
+     * List of the last modified times of the databases of each replica.
+     */
+    std::vector<std::string> dbModifiedTimes;
+    std::mutex db_m;
+    std::condition_variable db_cv;
+
+    /**
      * Thread function that is spawned to handle each client connection.
      */
     int processClient(int socket);
@@ -135,4 +143,10 @@ private:
     Network::Message handleLeader(Network::Message id);
 
     Network::Message handleIdentify(Network::Message id);
+
+    Network::Message handleTime(Network::Message message);
+
+    Network::Message handleSync(Network::Message message);
+
+    int syncDatabases(int port);
 };

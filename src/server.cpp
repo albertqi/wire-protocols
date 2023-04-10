@@ -6,6 +6,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sqlite3.h>
+#include <filesystem>
+#include <chrono>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -100,39 +102,10 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     network.registerCallback(Network::SEND, Callback(this, &Server::sendMessage));
     network.registerCallback(Network::LIST, Callback(this, &Server::listAccounts));
     network.registerCallback(Network::REQUEST, Callback(this, &Server::requestMessages));
+    network.registerCallback(Network::TIME, Callback(this, &Server::handleTime));
 
-    // Open database.
-    std::string db_name = "server_" + std::to_string(port) + ".db";
-    int r = sqlite3_open(db_name.c_str(), &db);
-    if (r != SQLITE_OK)
-    {
-        perror(sqlite3_errmsg(db));
-        exit(1);
-    }
-
-    // Enable foreign keys.
-    r = sqlite3_exec(db, "PRAGMA foreign_keys = ON", NULL, NULL, NULL);
-    if (r != SQLITE_OK)
-    {
-        perror(sqlite3_errmsg(db));
-        exit(1);
-    }
-
-    // Create users table if it does not already exist.
-    r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY)", NULL, NULL, NULL);
-    if (r != SQLITE_OK)
-    {
-        perror(sqlite3_errmsg(db));
-        exit(1);
-    }
-
-    // Create messages table if it does not already exist.
-    r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, sender TEXT, receiver TEXT, message TEXT, timestamp TEXT, FOREIGN KEY(receiver) REFERENCES users(username) ON DELETE CASCADE)", NULL, NULL, NULL);
-    if (r != SQLITE_OK)
-    {
-        perror(sqlite3_errmsg(db));
-        exit(1);
-    }
+    // Sync databases.
+    syncDatabases(port);
 
     serverRunning = true;
 }
@@ -141,6 +114,117 @@ void Server::stopServer()
 {
     sqlite3_close(db);
     serverRunning = false;
+}
+
+int Server::syncDatabases(int port)
+{
+    std::unique_lock lock(db_m);
+
+    // Find last modified time of database.
+    std::string dbPath = "server_" + std::to_string(port) + ".db";
+    std::string msgData = "0";
+    if (std::filesystem::exists(dbPath))
+    {
+        auto lastWriteTime = std::filesystem::last_write_time(dbPath);
+        msgData = std::to_string(std::chrono::duration_cast<std::chrono::nanoseconds>(lastWriteTime.time_since_epoch()).count());
+    }
+
+    // Send last modified time to replicas.
+    for (auto i = replicas.begin(); i != replicas.end(); ++i)
+    {
+        int socket = *i;
+        int r = network.sendMessage(socket, {Network::TIME, msgData});
+        if (r < 0)
+        {
+            return -1;
+        }
+    }
+    
+    while (dbModifiedTimes.size() != replicas.size())
+    {
+        // Wait for all replicas to respond.
+    }
+
+    // Find last modified time of most recent database.
+    long long modifiedTime = std::stoll(msgData);
+    long long mostRecentTime = modifiedTime;
+    for (const auto& time : dbModifiedTimes)
+    {
+        if (std::stoll(time) > mostRecentTime)
+        {
+            mostRecentTime = std::stoll(time);
+        }
+    }
+
+    if (mostRecentTime != 0) {
+        // Exists at least one replica with a database.
+
+        if (modifiedTime == mostRecentTime)
+        {
+            // Database is up to date.
+
+            // Send last modified time to replicas.
+            for (auto i = replicas.begin(); i != replicas.end(); ++i)
+            {
+                int socket = *i;
+                int r = network.sendMessage(socket, {Network::SYNC, msgData});
+                if (r < 0)
+                {
+                    return -1;
+                }
+            }
+        }
+        else
+        {
+            db_cv.wait(lock);
+        }
+    }
+
+    // Open database.
+    std::string db_name = "server_" + std::to_string(port) + ".db";
+    int r = sqlite3_open(db_name.c_str(), &db);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        return -1;
+    }
+
+    // Enable foreign keys.
+    r = sqlite3_exec(db, "PRAGMA foreign_keys = ON", NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        return -1;
+    }
+
+    // Create users table if it does not already exist.
+    r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY)", NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        return -1;
+    }
+
+    // Create messages table if it does not already exist.
+    r = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, sender TEXT, receiver TEXT, message TEXT, timestamp TEXT, FOREIGN KEY(receiver) REFERENCES users(username) ON DELETE CASCADE)", NULL, NULL, NULL);
+    if (r != SQLITE_OK)
+    {
+        perror(sqlite3_errmsg(db));
+        return -1;
+    }
+
+    return 0;
+}
+
+Network::Message Server::handleTime(Network::Message message)
+{
+    dbModifiedTimes.push_back(message.data);
+    return {Network::NO_RETURN};
+}
+
+Network::Message Server::handleSync(Network::Message message)
+{
+    return {Network::NO_RETURN};
 }
 
 Network::Message Server::createAccount(Network::Message info)
