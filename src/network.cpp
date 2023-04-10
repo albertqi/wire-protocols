@@ -20,6 +20,7 @@ int Network::receiveOperation(int socket)
     {
         return (err == 0)? -1 : err;
     }
+
     // Version checking works to both ensure that the network protocols are in
     // agreement as well make sure that the wire protocol is being followed at
     // all.
@@ -63,7 +64,8 @@ int Network::receiveOperation(int socket)
     Message output;
 
     // Message originated from server, and we don't care about those.
-    if (header.isServer && dropServerResponses)
+    if (header.isServer && dropServerResponses &&
+        serverOperations.find(message.operation) == serverOperations.end())
     {
         return err;
     }
@@ -71,7 +73,6 @@ int Network::receiveOperation(int socket)
     // Check that a callback has been registered for the received operation.
     if (registered_callbacks.find(header.operation) != registered_callbacks.end())
     {
-        
         Callback func = registered_callbacks.at(header.operation);
         output = func(message);
         if (output.operation != NO_RETURN)
