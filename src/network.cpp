@@ -133,9 +133,18 @@ int Network::sendMessage(int socket, Message message)
     }
     // Send the rest of the data.
     char* data = message.data.data();
-    err = send(socket, data, message.data.size(), 0);
+    int bytesSent = 0;
+    while (bytesSent < message.data.size())
+    {
+        err = send(socket, &data[bytesSent], message.data.size() - bytesSent, 0);
+        if (err < 0)
+        {
+            return err;
+        }
+        bytesSent += err;
+    }
 
-    return err;
+    return bytesSent;
 }
 
 int Network::sendError(int socket, std::string errorMsg)

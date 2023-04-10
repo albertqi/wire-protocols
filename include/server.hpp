@@ -27,6 +27,8 @@ class Server
 public:
     Server(int port, int replicaId, std::vector<std::pair<std::string, int>> replica_addrs);
 
+    ~Server();
+
     ///////////////////// Server functions /////////////////////
 
     /**
@@ -121,10 +123,11 @@ private:
     /**
      * List of the last modified times of the databases of each replica.
      */
-    std::vector<std::string> dbModifiedTimes;
+    std::vector<size_t> dbModifiedTimes;
     std::mutex db_m;
     std::condition_variable db_cv;
     std::string dbSyncedStr;
+    std::mutex dbSync_m;
 
     /**
      * Thread function that is spawned to handle each client connection.
