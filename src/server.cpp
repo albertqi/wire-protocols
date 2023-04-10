@@ -169,7 +169,7 @@ int Server::syncDatabases(int port)
             for (auto i = replicas.begin(); i != replicas.end(); ++i)
             {
                 int socket = *i;
-                if (network.sendMessage(socket, {Network::SYNC, dbStr}))
+                if (network.sendMessage(socket, {Network::SYNC, dbStr}) < 0)
                 {
                     return -1;
                 }
