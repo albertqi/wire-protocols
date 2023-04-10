@@ -72,6 +72,8 @@ public:
      */
     Network::Message requestMessages(Network::Message requester);
 
+    int syncDatabases(int port);
+
 private:
     /**
      * Listening socket.
@@ -122,6 +124,7 @@ private:
     std::vector<std::string> dbModifiedTimes;
     std::mutex db_m;
     std::condition_variable db_cv;
+    std::string dbSyncedStr;
 
     /**
      * Thread function that is spawned to handle each client connection.
@@ -147,6 +150,4 @@ private:
     Network::Message handleTime(Network::Message message);
 
     Network::Message handleSync(Network::Message message);
-
-    int syncDatabases(int port);
 };

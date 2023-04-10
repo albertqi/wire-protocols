@@ -8,6 +8,7 @@
 #include <sqlite3.h>
 #include <filesystem>
 #include <chrono>
+#include <fstream>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -103,9 +104,7 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
     network.registerCallback(Network::LIST, Callback(this, &Server::listAccounts));
     network.registerCallback(Network::REQUEST, Callback(this, &Server::requestMessages));
     network.registerCallback(Network::TIME, Callback(this, &Server::handleTime));
-
-    // Sync databases.
-    syncDatabases(port);
+    network.registerCallback(Network::SYNC, Callback(this, &Server::handleSync));
 
     serverRunning = true;
 }
@@ -121,11 +120,11 @@ int Server::syncDatabases(int port)
     std::unique_lock lock(db_m);
 
     // Find last modified time of database.
-    std::string dbPath = "server_" + std::to_string(port) + ".db";
+    std::string dbName = "server_" + std::to_string(port) + ".db";
     std::string msgData = "0";
-    if (std::filesystem::exists(dbPath))
+    if (std::filesystem::exists(dbName))
     {
-        auto lastWriteTime = std::filesystem::last_write_time(dbPath);
+        auto lastWriteTime = std::filesystem::last_write_time(dbName);
         msgData = std::to_string(std::chrono::duration_cast<std::chrono::nanoseconds>(lastWriteTime.time_since_epoch()).count());
     }
 
@@ -133,8 +132,7 @@ int Server::syncDatabases(int port)
     for (auto i = replicas.begin(); i != replicas.end(); ++i)
     {
         int socket = *i;
-        int r = network.sendMessage(socket, {Network::TIME, msgData});
-        if (r < 0)
+        if (network.sendMessage(socket, {Network::TIME, msgData}) < 0)
         {
             return -1;
         }
@@ -143,6 +141,7 @@ int Server::syncDatabases(int port)
     while (dbModifiedTimes.size() != replicas.size())
     {
         // Wait for all replicas to respond.
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
 
     // Find last modified time of most recent database.
@@ -156,19 +155,21 @@ int Server::syncDatabases(int port)
         }
     }
 
+    // Check if at least one replica with a database.
     if (mostRecentTime != 0) {
-        // Exists at least one replica with a database.
-
+        // Check if we need to sync.
         if (modifiedTime == mostRecentTime)
         {
-            // Database is up to date.
-
-            // Send last modified time to replicas.
+            // Convert database into string.
+            std::ifstream input(dbName, std::ios::binary);
+            std::string dbStr((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+            input.close();
+            
+            // Send database to replicas.
             for (auto i = replicas.begin(); i != replicas.end(); ++i)
             {
                 int socket = *i;
-                int r = network.sendMessage(socket, {Network::SYNC, msgData});
-                if (r < 0)
+                if (network.sendMessage(socket, {Network::SYNC, dbStr}))
                 {
                     return -1;
                 }
@@ -177,12 +178,16 @@ int Server::syncDatabases(int port)
         else
         {
             db_cv.wait(lock);
+
+            // Convert string into database.
+            std::ofstream output(dbName, std::ios::binary);
+            output << dbSyncedStr;
+            output.close();
         }
     }
 
     // Open database.
-    std::string db_name = "server_" + std::to_string(port) + ".db";
-    int r = sqlite3_open(db_name.c_str(), &db);
+    int r = sqlite3_open(dbName.c_str(), &db);
     if (r != SQLITE_OK)
     {
         perror(sqlite3_errmsg(db));
@@ -224,6 +229,8 @@ Network::Message Server::handleTime(Network::Message message)
 
 Network::Message Server::handleSync(Network::Message message)
 {
+    dbSyncedStr = message.data;
+    db_cv.notify_all();
     return {Network::NO_RETURN};
 }
 
@@ -338,8 +345,6 @@ Network::Message Server::deleteAccount(Network::Message requester)
         perror(sqlite3_errmsg(db));
         exit(1);
     }
-
-    // TODO: DROP USER'S MESSAGES IN QUEUE
 
     return {Network::DELETE, user};
 }
