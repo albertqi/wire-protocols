@@ -132,7 +132,7 @@ int Server::syncDatabases(int port)
     if (std::filesystem::exists(dbName))
     {
         auto lastWriteTime = std::filesystem::last_write_time(dbName);
-        msgData = std::to_string((size_t) std::chrono::duration_cast<std::chrono::milliseconds>(lastWriteTime.time_since_epoch()).count());
+        msgData = std::to_string((size_t)std::chrono::duration_cast<std::chrono::milliseconds>(lastWriteTime.time_since_epoch()).count());
     }
 
     // Send last modified time to replicas.
@@ -143,7 +143,7 @@ int Server::syncDatabases(int port)
             return -1;
         }
     }
-    
+
     while (dbModifiedTimes.size() != replicas.size())
     {
         // Wait for all replicas to respond.
@@ -162,7 +162,8 @@ int Server::syncDatabases(int port)
     }
 
     // Check if there exists at least one replica with a database.
-    if (mostRecentTime != 0) {
+    if (mostRecentTime != 0)
+    {
         // Check if we need to sync.
         if (modifiedTime == mostRecentTime)
         {
@@ -171,7 +172,7 @@ int Server::syncDatabases(int port)
             // Convert database to string.
             std::ifstream input(dbName, std::ios::binary);
             std::string dbStr((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-            
+
             // Send database to replicas.
             for (auto socket : replicas)
             {
@@ -450,7 +451,9 @@ Network::Message Server::handleLeader(Network::Message message)
         runningReplicas.insert(id);
         leaderId = id;
     }
-    catch (...) {}
+    catch (...)
+    {
+    }
 
     return {Network::NO_RETURN};
 }
@@ -462,7 +465,9 @@ Network::Message Server::handleIdentify(Network::Message message)
         int id = std::stoi(message.data);
         runningReplicas.insert(id);
     }
-    catch (...) {}
+    catch (...)
+    {
+    }
 
     return {Network::NO_RETURN};
 }
@@ -470,7 +475,7 @@ Network::Message Server::handleIdentify(Network::Message message)
 void Server::discoverReplicas()
 {
     // Send out ID to other replicas. Identify ourselves as the leader if we are.
-    Network::Message identifyMessage {Network::IDENTIFY, std::to_string(replicaId)};    
+    Network::Message identifyMessage{Network::IDENTIFY, std::to_string(replicaId)};
     if (isLeader)
     {
         identifyMessage.operation = Network::LEADER;
