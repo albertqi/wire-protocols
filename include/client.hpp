@@ -4,6 +4,7 @@
  * class uses the `Network` class to handle the data link layer and registers
  * callbacks for messages received from the server.
  */
+
 #pragma once
 
 #include "network.hpp"
