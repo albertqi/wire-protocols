@@ -33,14 +33,14 @@ The buffer size with the wire protocol is the standard socket buffer size, and t
 
 ## Replication
 
-We decided there were four main things to accomplish to achieve two-fault tolerance and persistance:
+We decided there were four main things to accomplish to achieve two-fault tolerance and persistence:
 1. Move in-memory data structures to a persistent database.
 2. Forward requests received on the primary to the replicas.
 3. Perform leader-election when the primary goes down.
 4. Reconnect the client to a replica when the currently connected server goes down.
 
-We decided to use a leader-follower system because it lent itself well to our architecture. The leader could just act like a client to the replicas and forward requests it received, and they would be handled automatically by the existing code.
+We decided to use a leader-follower system because it lent itself well to our architecture. The leader could just act like a client to the replicas and forward requests that it received, and they would be handled automatically by the existing code.
 
-Fundamentally, there weren't that many changes we needed to make to get these results. The overall architecture and design of the system remained the same. Some major changes are the database setup/code in the server (including re-syncing the databases between system starts), client reconnection, some additional operations to our wire-protocols (as well as handling larger transmission sizes), and some clever handling of network connections.
+Fundamentally, there were not that many changes we needed to make to get these results. The overall architecture and design of the system remained the same. Some major changes are the database setup/code in the server (including re-syncing the databases between system starts), client reconnection, some additional operations to our wire-protocols (as well as handling larger transmission sizes), and some clever handling of network connections.
 
 All of the tests from the previous part also remain passing after some small changes to the setup code.
