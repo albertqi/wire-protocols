@@ -18,6 +18,7 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
 {
     network.dropServerResponses = true;
     network.isServer = true;
+    serverRunning = false;
 
     // Initialize socket
     serverFd = socket(AF_INET, SOCK_STREAM, 0);
@@ -86,11 +87,19 @@ Server::Server(int port, int replicaId, std::vector<std::pair<std::string, int>>
         replicas.push_back(sock);
     }
 
-    // TODO: Repace with actual leader election.
     isLeader = replicaId == 0;
     network.isServer = replicaId != 0;
 
+    if (isLeader)
+    {
+        for (auto socket : replicas)
+        {
+            network.sendMessage(socket, {Network::LEADER, std::to_string(replicaId)});
+        }
+    }
+
     // Register callbacks.
+    network.registerCallback(Network::LEADER, Callback(this, &Server::handleLeader));
     network.registerCallback(Network::IDENTIFY, Callback(this, &Server::handleIdentify));
     network.registerCallback(Network::CREATE, Callback(this, &Server::createAccount));
     network.registerCallback(Network::DELETE, Callback(this, &Server::deleteAccount));
@@ -323,41 +332,96 @@ Network::Message Server::requestMessages(Network::Message message)
     return {Network::SEND, result};
 }
 
-Network::Message Server::handleIdentify(Network::Message message)
+Network::Message Server::handleLeader(Network::Message message)
 {
-    std::unique_lock lk(replicas_m);
+    std::cout << "Leader id: " << message.data << "\n";
     try
     {
         int id = std::stoi(message.data);
-        runningReplicas.push(id);
+        leaderId = id;
     }
     catch (...) {}
 
     return {Network::NO_RETURN};
 }
 
-void Server::doLeaderElection()
+Network::Message Server::handleIdentify(Network::Message message)
 {
-    std::unique_lock lk(replicas_m);
-    runningReplicas.push(replicaId);
-    lk.unlock();
-
-    // Send out id to other replicas.
-    for (auto socket : replicas)
+    std::cout << "Recv'd id: " << message.data << "\n";
+    try
     {
-        network.sendMessage(socket, {Network::IDENTIFY, std::to_string(replicaId)});
+        int id = std::stoi(message.data);
+        runningReplicas.insert(id);
+    }
+    catch (...) {}
+
+    return {Network::NO_RETURN};
+}
+
+void Server::discoverReplicas()
+{
+    // Send out id to other replicas. Identify ourselves as the leader if we are.
+    Network::Message identifyMessage {Network::IDENTIFY, std::to_string(replicaId)};    
+    if (isLeader)
+    {
+        identifyMessage.operation = Network::LEADER;
+    }
+
+    for (auto i = replicas.begin(); i != replicas.end();)
+    {
+        int socket = *i;
+        std::cout << "sending identify to: " << socket << "\n";
+        int ret = network.sendMessage(socket, identifyMessage);
+        if (ret < 0)
+        {
+            std::cout << "replica down: " << socket << "\n";
+            // Replica down.
+            i = replicas.erase(i);
+        }
+        else
+        {
+            i++;
+        }
     }
 
     // Wait to receive ids from other replicas.
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-    int minId = runningReplicas.top();
-    if (minId == replicaId)
+    while (runningReplicas.size() < replicas.size())
     {
-        isLeader = true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
-    runningReplicas = std::priority_queue<int>();
+    if (runningReplicas.find(leaderId) == runningReplicas.end() && !isLeader)
+    {
+        // Leader went down!
+        doLeaderElection();
+    }
+}
+
+void Server::doLeaderElection()
+{
+    std::cout << "Leader has gone down. Performing leader election" << std::endl;
+    runningReplicas.insert(replicaId);
+
+    for (auto i : runningReplicas)
+    {
+        std::cout << i << " ";
+    }
+    std::cout << "\n";
+    std::cout << "my id: " << replicaId << "\n";
+
+    int minId = *runningReplicas.begin();
+    if (minId == replicaId)
+    {
+        std::cout << "This server is the new leader." << std::endl;
+        isLeader = true;
+        network.isServer = false;
+        for (auto socket : replicas)
+        {
+            network.sendMessage(socket, {Network::LEADER, std::to_string(replicaId)});
+        }
+    }
+
+    runningReplicas.clear();
 }
 
 void Server::doReplication(Network::Message message)
@@ -369,9 +433,20 @@ void Server::doReplication(Network::Message message)
     }
 
     // Otherwise, tell the replicas about the new message.
-    for (auto socket : replicas)
+    for (auto i = replicas.begin(); i != replicas.end();)
     {
-        network.sendMessage(socket, message);
+        int socket = *i;
+        int ret = network.sendMessage(socket, message);
+        if (ret < 0)
+        {
+            std::cout << "replica down\n";
+            // Replica down.
+            i = replicas.erase(i);
+        }
+        else
+        {
+            i++;
+        }
     }
 }
 
@@ -390,20 +465,30 @@ int Server::acceptClient()
         return clientSocket;
     }
 
-    // Clients aren't allowed to connect directly to replicas.
-    if (!isLeader)
-    {
-        close(clientSocket);
-        return 0;
-    }
+    // // Clients aren't allowed to connect directly to replicas.
+    // if (!isLeader && serverRunning)
+    // {
+    //     std::cout << "Not allowed to connect to replica...\n";
+    //     close(clientSocket);
+    //     return 0;
+    // }
 
     // Enable TCP KeepAlive to ensure we're notified if the leader goes down.
     int enable = 1;
-    if (setsockopt(serverFd, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(int)) < 0)
+    if (setsockopt(clientSocket, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(int)) < 0)
     {
         perror("setsockopt()");
-        exit(1);
+        return -1;
     }
+
+    struct linger lo = { 1, 0 };
+    if (setsockopt(clientSocket, SOL_SOCKET, SO_LINGER, &lo, sizeof(lo)) < 0)
+    {
+        perror("setsockopt()");
+        return -1;
+    }
+
+    std::cout << "Accepting client\n";
 
     std::thread socketThread(&Server::processClient, this, clientSocket);
     socketThread.detach();
@@ -413,26 +498,20 @@ int Server::acceptClient()
 
 int Server::processClient(int socket)
 {
+    std::cout << "Starting thread for socket: " << socket << "\n";
     while (serverRunning)
     {
         int err = network.receiveOperation(socket);
         if (err < 0)
         {
-            // The leader has fallen...
-            auto replicaIndex = std::find(replicas.begin(), replicas.end(), socket);
-            if (replicaIndex != replicas.end())
-            {
-                replicas.erase(replicaIndex);
-                if (!isLeader)
-                {
-                    doLeaderElection();
-                }
-            }
+            std::cout << "network error for socket: " << socket << "\n";
+            discoverReplicas();
             break;
         }
     }
 
     close(socket);
+    std::cout << "Closing thread for socket: " << socket << "\n";
 
     return 0;
 }

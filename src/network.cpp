@@ -12,13 +12,13 @@
 int Network::receiveOperation(int socket)
 {
     int err;
-    Metadata header;
+    Metadata header {};
 
     // Read header from the socet.
     err = read(socket, &header, sizeof(Metadata));
-    if (err < 0)
+    if (err <= 0)
     {
-        return err;
+        return (err == 0)? -1 : err;
     }
     // Version checking works to both ensure that the network protocols are in
     // agreement as well make sure that the wire protocol is being followed at
@@ -58,7 +58,7 @@ int Network::receiveOperation(int socket)
         header.operation,
         data,
         sender,
-        receiver
+        receiver,
     };
     Message output;
 

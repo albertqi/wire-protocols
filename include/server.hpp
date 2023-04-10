@@ -14,7 +14,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
-#include <queue>
+#include <set>
 #include <vector>
 
 #include <sqlite3.h>
@@ -107,8 +107,13 @@ private:
      */
     Network network;
 
+    int leaderId;
+
+    /**
+     * List of currently acive replicas determined through the IDENTIFY protocol.
+     */
     std::mutex replicas_m;
-    std::priority_queue<int> runningReplicas;
+    std::set<int> runningReplicas;
 
     /**
      * Thread function that is spawned to handle each client connection.
@@ -120,7 +125,14 @@ private:
      */
     void doReplication(Network::Message message);
 
+    /**
+     * 
+     */
     void doLeaderElection();
+
+    void discoverReplicas();
+
+    Network::Message handleLeader(Network::Message id);
 
     Network::Message handleIdentify(Network::Message id);
 };

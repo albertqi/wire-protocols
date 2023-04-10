@@ -100,6 +100,7 @@ public:
         LIST,
 
         // Server -> Server operations.
+        LEADER, // Contains data
         IDENTIFY, // Contains data
         SYNC, // Contains data
         TIME, // Contains data
